@@ -1,8 +1,8 @@
-import * as T from './time.js?v=202611051917';
-import * as G from './game.js?v=202611051917';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611051917';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611051917';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611051917';
+import * as T from './time.js?v=202611051932';
+import * as G from './game.js?v=202611051932';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611051932';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611051932';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611051932';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -58,6 +58,33 @@ async function share(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Updates: phones can hold on to an old copy of the site. The app knows its
+// own version (the ?v= stamp on this file); it checks the live page now and
+// then, and reloads itself when there's a newer one (never mid-card).
+// ---------------------------------------------------------------------------
+
+const VERSION = new URL(import.meta.url).searchParams.get('v') || 'dev';
+let pendingUpdate = null;
+
+async function checkForUpdate() {
+  if (VERSION === 'dev' || !navigator.onLine) return;
+  try {
+    const res = await fetch(`${location.pathname}?check=${Date.now()}`, { cache: 'no-store' });
+    const latest = (await res.text()).match(/js\/app\.js\?v=([\w-]+)/)?.[1];
+    if (latest && latest !== VERSION) { pendingUpdate = latest; applyUpdate(); }
+  } catch { /* offline: try again later */ }
+}
+
+function applyUpdate() {
+  const r = route().name;
+  if (!pendingUpdate || r === 'play' || r === 'help') return; // wait until the card is done
+  location.replace(`${location.pathname}?v=${pendingUpdate}${location.hash}`);
+}
+
+// Tidy the address bar after an update reload.
+if (new URLSearchParams(location.search).has('v')) history.replaceState(null, '', location.pathname + location.hash);
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -87,7 +114,7 @@ function go(hash) {
   if (location.hash === hash) render(); else location.hash = hash;
 }
 
-window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { closeSheet(); applyUpdate(); render(); window.scrollTo(0, 0); });
 
 // ---------------------------------------------------------------------------
 // Render
@@ -277,25 +304,28 @@ function answerList(day, card) {
 function assistedCard(day, pid, name, now, lock, isMain) {
   const card = day?.cards?.[pid];
   const filled = (card?.answers ?? []).filter((a) => String(a).trim()).length;
-  const left = lockPhrase(S.today, now);
+  const open = `<a class="btn ${isMain ? 'primary big' : 'sm'}" href="#/help/${pid}">`;
+  const skip = `<button class="btn ghost ${isMain ? '' : 'sm'}" data-act="skip" data-pid="${pid}">Not today 😴</button>`;
   let status, actions;
   if (card?.skipped) {
     status = `😴 ${esc(name)} is sitting out today.`;
-    actions = `<button class="btn" data-act="unskip" data-pid="${pid}">Actually, let’s play</button>`;
+    actions = `<button class="btn ${isMain ? '' : 'sm'}" data-act="unskip" data-pid="${pid}">Actually, let’s play</button>`;
   } else if (card?.startedAt) {
-    status = filled === 5 ? `✓ All 5 answers in. You can still change them until 1pm.` : `${filled} of 5 answered. ${esc(left)}.`;
-    actions = `<a class="btn ${filled === 5 ? '' : 'primary'} big" href="#/help/${pid}">${filled === 5 ? 'Review answers' : `Continue ${esc(name)}’s card`}</a>
-      ${filled ? '' : `<button class="btn ghost" data-act="skip" data-pid="${pid}">Not today 😴</button>`}`;
+    status = filled === 5 ? '✓ All 5 answers are in.' : `${filled} of 5 answered.`;
+    actions = `${open}${filled === 5 ? 'Review' : 'Continue'}</a>${filled ? '' : skip}`;
   } else {
-    status = `No timer. Read each category to ${esc(name)} and type in the answer. You can stop and come back later. ${esc(left)}.`;
-    actions = `<a class="btn ${isMain ? 'primary' : ''} big" href="#/help/${pid}">${day ? 'Start' : '🎲 Roll &amp; start'} ${esc(name)}’s card</a>
-      <button class="btn ghost" data-act="skip" data-pid="${pid}">Not today 😴</button>`;
+    status = isMain ? `No timer. Ask ${esc(name)} each category and type in the answer. You can stop and come back.` : 'No timer.';
+    actions = `${open}${day ? 'Start' : '🎲 Roll &amp; start'}${isMain ? ` ${esc(name)}’s card` : ''}</a>${skip}`;
   }
-  return `<section class="card ${isMain ? 'hero' : 'helper'}">
-    <p class="eyebrow">${isMain ? '' : 'Playing for someone'}</p>
-    <h3>${esc(name)}’s card</h3>
-    <p>${status}</p>
-    <div class="row">${actions}</div>
+  status += ` ${esc(lockPhrase(S.today, now))}.`;
+  if (isMain) {
+    return `<section class="card hero"><h3>${esc(name)}’s card</h3><p>${status}</p><div class="row">${actions}</div></section>`;
+  }
+  return `<section class="card helper">
+    <div class="helper-row">
+      <div><p class="label">Helping ${esc(name)} play?</p><p class="fine">${status}</p></div>
+      <div class="helper-actions">${actions}</div>
+    </div>
   </section>`;
 }
 
@@ -474,9 +504,10 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   app.innerHTML = `
     <div class="play screen ${assisted ? 'assisted' : ''}">
       <div class="play-top">
-        <div class="letter-tile sm">${L}</div>
-        <div class="play-hint">${assisted ? `${esc(name)}’s card<br>` : ''}Everything starts with <strong>${L}</strong></div>
-        <div class="clock">${status}<span class="save" aria-live="polite"></span></div>
+        <div class="letter-tile sm" aria-label="Letter ${L}">${L}</div>
+        <span class="save" aria-live="polite"></span>
+        <div class="clock">${status}</div>
+        ${assisted ? '' : '<div class="tbar" aria-hidden="true"><i></i></div>'}
       </div>
       <div class="scroller">
         <form class="answers" autocomplete="off" onsubmit="return false">
@@ -484,7 +515,6 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
             <label class="ans">
               <span class="p"><span class="n">${i + 1}</span>${esc(p)}</span>
               <input data-i="${i}" name="a${i}" value="${esc(answers[i])}" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="${i < n - 1 ? 'next' : 'done'}" placeholder="${assisted ? `${esc(name)}’s answer` : `${L}…`}">
-              <span class="rep-msg" aria-live="polite"></span>
             </label>`).join('')}
         </form>
         <div class="play-foot">${foot}</div>
@@ -502,12 +532,13 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     if (!norm) return -1;
     return answers.findIndex((a, j) => j !== i && normalize(a) === norm);
   };
+  // Only the box being typed in turns red (no extra text, so nothing jumps); it's cleared when you leave it.
   const showRepeat = (el) => {
     const i = +el.dataset.i;
     const j = repeatOf(i);
     const row = el.closest('.ans');
     row.classList.toggle('repeat', j >= 0);
-    row.querySelector('.rep-msg').textContent = j >= 0 ? `Already used for #${j + 1}. Try something else.` : '';
+    el.setAttribute('aria-invalid', j >= 0 ? 'true' : 'false');
   };
   const clearRepeat = (el) => {
     const i = +el.dataset.i;
@@ -524,7 +555,7 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     el.addEventListener('input', () => {
       answers[+el.dataset.i] = el.value;
       saver.queue({ answers: answers.slice() });
-      inputs.forEach(showRepeat);
+      showRepeat(el);
     });
     el.addEventListener('blur', () => clearRepeat(el));
     el.addEventListener('focus', () => keepInView(el.closest('.ans'), scroller));
@@ -577,9 +608,15 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
       if (G.isRevealed(today)) { finish('reveal'); toast('Cards are locked for today.'); }
       return;
     }
-    const left = G.deadline(card, today) - Date.now();
+    const end = G.deadline(card, today);
+    const left = end - Date.now();
     tEl.textContent = T.timerLabel(left);
     tEl.classList.toggle('hurry', left <= 30000);
+    const bar = $('.tbar i', app);
+    if (bar) {
+      bar.style.transform = `scaleX(${Math.max(0, Math.min(1, left / Math.max(1, end - card.startedAt)))})`;
+      bar.parentElement.classList.toggle('hurry', left <= 30000);
+    }
     if (left <= 0) finish('time');
   };
   const iv = setInterval(tick, assisted ? 15000 : 250);
@@ -610,6 +647,10 @@ async function viewDay(id, { embedded = false } = {}) {
   const sitting = order.filter((pid) => !players[pid].played);
   const meId = S.me?.id;
 
+  const meRank = playing.indexOf(meId);
+  const youLine = meRank >= 0
+    ? `<p class="you">You: <strong>${players[meId].total} point${players[meId].total === 1 ? '' : 's'}</strong> · ${ordinal(playing.findIndex((x) => players[x].total === players[meId].total) + 1)} of ${playing.length}</p>`
+    : '';
   const standings = playing.map((pid, i) => `
     <li class="${pid === meId ? 'me' : ''}"><span class="rank">${rankLabel(playing, players, i)}</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">${players[pid].total}</span></li>`).join('')
     + sitting.map((pid) => `<li class="out"><span class="rank">😴</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">–</span></li>`).join('');
@@ -633,11 +674,17 @@ async function viewDay(id, { embedded = false } = {}) {
   return `${top}
     <section class="card day-head">
       <div class="letter-tile">${esc(day.letter)}</div>
-      <div><p class="eyebrow">${day.title ? `✨ ${esc(day.title)} · ` : ''}Rolled by ${esc(day.rolledBy)}</p><ol class="standings">${standings}</ol></div>
+      <div><p class="eyebrow">${day.title ? `✨ ${esc(day.title)} · ` : ''}Rolled by ${esc(day.rolledBy)}</p>${youLine}<ol class="standings">${standings}</ol></div>
     </section>
     <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
     ${sections}
     <button class="btn big" data-act="share-day" data-day="${id}">Share results</button>`;
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }
 
 function rankLabel(ids, players, i) {
@@ -833,6 +880,7 @@ function openSettings() {
         : `<form data-form="admin" class="form inline"><input name="code" placeholder="Admin code" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Admin code"><button class="btn">Unlock</button></form>`}
       ${PLAYTEST ? '<hr><p class="label">Playtest</p><p class="fine">Practice data is separate from the real game.</p><button class="btn" data-act="pt-wipe">Wipe all playtest data</button>' : ''}
       <button class="btn ghost big" data-act="close">Close</button>
+      <p class="version">Version ${esc(VERSION)}</p>
     </div>`;
   sheetEl.classList.add('open');
 }
@@ -924,7 +972,8 @@ function maybeRefresh(force = false) {
   if (force || Date.now() - lastRefresh > 30000 || G.todayId() !== S.today) { lastRefresh = Date.now(); render(); }
 }
 setInterval(() => maybeRefresh(), 5000);
-document.addEventListener('visibilitychange', () => maybeRefresh(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); maybeRefresh(true); });
+setInterval(checkForUpdate, 5 * 60_000);
 
 // Reveal moment: re-render right at 1pm if the page is open.
 setInterval(() => {
@@ -945,4 +994,5 @@ setInterval(() => {
     } catch { /* offline; render will show it */ }
   }
   render();
+  checkForUpdate();
 })();

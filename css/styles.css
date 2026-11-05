@@ -9,6 +9,7 @@
   --accent-soft: #fbe3dc;
   --gold: #f4b63f;
   --gold-ink: #3a2400;
+  --gold-soft: #fcefc8;
   --ok: #2c8a57;
   --go: #2c8a57;
   --go-ink: #1d6a40;
@@ -31,6 +32,7 @@
     --accent: #ff6a52;
     --accent-soft: #3a2420;
     --gold: #f4b63f;
+    --gold-soft: #3b321c;
     --ok: #4cc283;
     --go: #2f9a60;
     --go-ink: #8fe0b2;
@@ -228,13 +230,15 @@ input:disabled { opacity: .7; }
 .save[data-state=offline] { color: var(--warn); font-weight: 700; }
 
 .play-top {
-  flex: none; display: flex; align-items: center; gap: 10px;
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px;
   padding: calc(env(safe-area-inset-top) + 6px) 16px 6px;
   border-bottom: 1px solid var(--line);
 }
 .play-top .letter-tile.sm { width: 38px; height: 38px; font-size: 24px; border-radius: 10px; }
-.play-hint { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); line-height: 1.25; }
-.play-hint strong { color: var(--ink); }
+.play-top .save { flex: 1; min-width: 0; text-align: center; }
+.tbar { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; overflow: hidden; }
+.tbar i { display: block; height: 100%; background: var(--gold); transform-origin: left center; transition: transform .25s linear; }
+.tbar.hurry i { background: var(--accent); }
 .clock { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .clock .t { font-size: 26px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .clock .t.hurry { color: var(--accent); }
@@ -253,8 +257,10 @@ input:disabled { opacity: .7; }
 .ans .p { font-weight: 800; font-size: 17px; line-height: 1.25; display: flex; gap: 8px; }
 .ans .n { color: var(--accent); font-weight: 900; min-width: 12px; }
 .ans input { padding: 10px 12px; font-size: 18px; }
-.ans:focus-within { background: var(--accent-soft); }
-.ans:focus-within .p { color: var(--accent); }
+.ans:focus-within { background: var(--gold-soft); }
+.ans:focus-within input { border-color: var(--gold); }
+.ans.repeat, .ans.repeat:focus-within { background: var(--accent-soft); }
+.ans.repeat .p { color: var(--accent); }
 .play-foot { margin-top: 14px; text-align: center; }
 .play-foot .fine { margin-top: 10px; }
 .over-msg { font-size: 20px; font-weight: 800; margin-bottom: 12px; }
@@ -360,6 +366,15 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .btn.sm { min-height: 38px; padding: 6px 14px; font-size: 15px; border-radius: 12px; }
 .pt-bar .btn:not(.primary) { background: rgba(255, 255, 255, .7); border-color: transparent; color: var(--gold-ink); }
 .pt-bar .btn.ghost { background: transparent; text-decoration: underline; }
-.rep-msg { font-size: 14px; font-weight: 700; color: var(--accent); }
-.rep-msg:empty { display: none; }
-.ans.repeat input { border-color: var(--accent); text-decoration: line-through; }
+.ans.repeat input, .ans.repeat:focus-within input { border-color: var(--accent); }
+
+/* --- Helper card (someone else's turn to help Kenny) ---------------------- */
+.card.helper { padding: 12px 14px; }
+.helper-row { display: flex; align-items: center; gap: 12px; }
+.helper-row > div:first-child { flex: 1; min-width: 0; }
+.helper-row .label { margin: 0; color: var(--ink); }
+.helper-row .fine { margin: 2px 0 0; }
+.helper-actions { display: flex; flex-direction: column; align-items: stretch; gap: 4px; flex: none; }
+
+.you { font-size: 16px; margin: 0 0 6px; }
+.version { text-align: center; font-size: 12px; color: var(--dim); margin: 0; }
