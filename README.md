@@ -16,7 +16,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 ### Kenny's card (playing with a helper)
 
 Players listed in `ASSISTED_PLAYERS` (in `js/config.js`) play with a helper's phone:
-- There's no timer, and the screen shows one big category at a time. The helper asks the question out loud and types the answer.
+- Same screen as a regular card, but with no timer: a green **Kenny mode** tag sits where the clock would be. The helper asks each category out loud and types the answer.
 - Answers save as you go, so you can close it and come back later. It has to be done by 1pm.
 - **Not today 😴** marks a day off. Tap **Actually, let's play** to undo it.
 - Kenny has his own page, `kenny.html`, which you can add to the Home Screen as a second icon.

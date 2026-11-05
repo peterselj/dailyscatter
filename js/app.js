@@ -363,7 +363,7 @@ async function renderPlay(pid, name, assisted) {
     app.innerHTML = `<div class="card empty"><p>${esc(errorMessage(e))}</p><a class="btn" href="#/">Back</a></div>`;
     return;
   }
-  if (assisted) playAssisted(day, pid, name, card); else playTimed(day, pid, card);
+  playCard(day, pid, card, { assisted, name });
 }
 
 function rollAnimation(letter, rolling) {
@@ -452,29 +452,41 @@ function keepInView(row, scroller) {
   setTimeout(go, 400);
 }
 
-function playTimed(day, pid, card) {
+// One play screen for both modes. Timed: 3-minute clock. Assisted (Kenny):
+// no clock, a "Kenny mode" tag instead, and the card stays open until the lock.
+function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   const today = S.today;
+  const n = day.prompts.length;
   const answers = (card.answers ?? []).slice();
-  while (answers.length < day.prompts.length) answers.push('');
+  while (answers.length < n) answers.push('');
   const bk = store.get(`ds.bk.${today}.${pid}`);
   if (bk?.answers && bk.at > (card.updatedAt ?? 0)) bk.answers.forEach((a, i) => { answers[i] = a; });
 
+  const L = esc(day.letter);
+  const status = assisted
+    ? `<span class="mode-tag">${esc(name)} mode</span>`
+    : `<span class="t">${esc(T.timerLabel(G.deadline(card, today) - Date.now()))}</span>`;
+  const foot = assisted
+    ? `<button class="btn go big" data-act="assist-done">Done for now ✓</button>
+       <p class="fine">Answers save as you type. You can come back and change them ${PLAYTEST ? 'until someone taps Reveal now' : `until ${esc(T.clockLabel(G.lockAt(today)))} ET`}.</p>`
+    : '<button class="btn go big" data-act="done-early">I’m done</button>';
+
   app.innerHTML = `
-    <div class="play screen">
+    <div class="play screen ${assisted ? 'assisted' : ''}">
       <div class="play-top">
-        <div class="letter-tile md">${esc(day.letter)}</div>
-        <div class="play-hint">Everything starts with <strong>${esc(day.letter)}</strong></div>
-        <div class="clock"><span class="t">${esc(T.timerLabel(G.deadline(card, today) - Date.now()))}</span><span class="save" aria-live="polite"></span></div>
+        <div class="letter-tile sm">${L}</div>
+        <div class="play-hint">${assisted ? `${esc(name)}’s card<br>` : ''}Everything starts with <strong>${L}</strong></div>
+        <div class="clock">${status}<span class="save" aria-live="polite"></span></div>
       </div>
       <div class="scroller">
         <form class="answers" autocomplete="off" onsubmit="return false">
           ${day.prompts.map((p, i) => `
             <label class="ans">
               <span class="p"><span class="n">${i + 1}</span>${esc(p)}</span>
-              <input data-i="${i}" name="a${i}" value="${esc(answers[i])}" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="${i < 4 ? 'next' : 'done'}" placeholder="${esc(day.letter)}…">
+              <input data-i="${i}" name="a${i}" value="${esc(answers[i])}" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="${i < n - 1 ? 'next' : 'done'}" placeholder="${assisted ? `${esc(name)}’s answer` : `${L}…`}">
             </label>`).join('')}
         </form>
-        <div class="play-foot"><button class="btn big" data-act="done-early">I’m done</button></div>
+        <div class="play-foot">${foot}</div>
         <div class="kb-spacer"></div>
       </div>
     </div>`;
@@ -482,7 +494,6 @@ function playTimed(day, pid, card) {
   const saver = makeSaver(today, pid, saveBadge);
   const scroller = $('.scroller', app);
   const inputs = [...app.querySelectorAll('.answers input')];
-  const firstEmpty = inputs.find((el) => !el.value) ?? inputs[0];
 
   inputs.forEach((el) => {
     el.addEventListener('input', () => { answers[+el.dataset.i] = el.value; saver.queue({ answers: answers.slice() }); });
@@ -496,7 +507,7 @@ function playTimed(day, pid, card) {
   });
   const onResize = () => { const a = document.activeElement; if (a?.closest?.('.answers')) keepInView(a.closest('.ans'), scroller); };
   vv?.addEventListener('resize', onResize);
-  firstEmpty.focus();
+  (inputs.find((el) => !el.value) ?? inputs[0]).focus();
 
   let finished = false;
   const tEl = $('.clock .t', app);
@@ -506,126 +517,48 @@ function playTimed(day, pid, card) {
     clearInterval(iv);
     inputs.forEach((el) => { el.disabled = true; });
     document.activeElement?.blur?.();
-    tEl.textContent = '0:00';
     $('.play', app)?.classList.add('over');
+    if (tEl) tEl.textContent = '0:00';
     const fields = { answers: answers.slice() };
     if (why === 'early') fields.doneAt = Date.now();
     saver.queue(fields, 0);
-    $('.play-foot', app).innerHTML = `<p class="over-msg">${why === 'early' ? 'Locked in!' : 'Time’s up! Answers locked.'}</p><a class="btn primary big" href="#/">Done</a>`;
+    const msg = { early: 'Locked in!', time: 'Time’s up! Answers locked.', reveal: 'Cards are locked for today.' }[why];
+    $('.play-foot', app).innerHTML = `<p class="over-msg">${msg}</p><a class="btn primary big" href="#/">Done</a>`;
     scroller.scrollTop = scroller.scrollHeight;
     await saver.flush();
   };
+
+  let armed = null; // "I'm done" needs a second tap, so a stray tap can't end your card
+  playActions.doneEarly = (btn) => {
+    if (armed) { clearTimeout(armed); finish('early'); return; }
+    btn.textContent = 'Tap again to lock in';
+    btn.classList.add('armed');
+    armed = setTimeout(() => { armed = null; btn.textContent = 'I’m done'; btn.classList.remove('armed'); }, 3000);
+  };
+  playActions.assistDone = async () => { await saver.flush(); go('#/'); };
+
   const tick = () => {
+    if (assisted) {
+      if (G.isRevealed(today)) { finish('reveal'); toast('Cards are locked for today.'); }
+      return;
+    }
     const left = G.deadline(card, today) - Date.now();
     tEl.textContent = T.timerLabel(left);
     tEl.classList.toggle('hurry', left <= 30000);
     if (left <= 0) finish('time');
   };
-  const iv = setInterval(tick, 250);
+  const iv = setInterval(tick, assisted ? 15000 : 250);
   tick();
-  playActions.doneEarly = () => finish('early');
-  playCleanup = () => { clearInterval(iv); vv?.removeEventListener('resize', onResize); saver.flush(); playActions.doneEarly = null; };
+  playCleanup = () => {
+    clearInterval(iv);
+    clearTimeout(armed);
+    vv?.removeEventListener('resize', onResize);
+    saver.flush();
+    playActions.doneEarly = playActions.assistDone = null;
+  };
 }
 
-const playActions = { doneEarly: null };
-
-function playAssisted(day, pid, name, card) {
-  const today = S.today;
-  const n = day.prompts.length;
-  const answers = (card.answers ?? []).slice();
-  while (answers.length < n) answers.push('');
-  const bk = store.get(`ds.bk.${today}.${pid}`);
-  if (bk?.answers && bk.at > (card.updatedAt ?? 0)) bk.answers.forEach((a, i) => { answers[i] = a; });
-  const saver = makeSaver(today, pid, saveBadge);
-  let step = answers.findIndex((a) => !String(a).trim());
-  if (step < 0) step = n; // all answered: show the review list
-  let view = null; // 'ask' or 'review'
-  let iv;
-
-  const top = `
-    <div class="ast-top">
-      <a href="#/" class="back" aria-label="Back">‹ Save &amp; close</a>
-      <span class="save" aria-live="polite"></span>
-    </div>
-    <p class="ast-who">${esc(name)}’s card · ${esc(lockPhrase(today).toLowerCase())}</p>`;
-
-  // The question screen is drawn once and updated in place, so the keyboard
-  // stays open while moving between categories.
-  const drawAsk = () => {
-    app.innerHTML = `<div class="assist screen">${top}
-      <div class="dots">${day.prompts.map((_, i) => `<button class="dot" data-step="${i}" aria-label="Category ${i + 1}"></button>`).join('')}</div>
-      <div class="ask">
-        <div class="letter-tile ask-tile">${esc(day.letter)}</div>
-        <div class="ask-text">
-          <p class="ask-line">${esc(name)}, what’s…</p>
-          <p class="ask-prompt"></p>
-          <p class="ask-line">starting with <strong>${esc(day.letter)}</strong></p>
-        </div>
-      </div>
-      <input class="ask-input" name="kenny-answer" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="next" placeholder="Type ${esc(name)}’s answer" aria-label="Answer">
-      <div class="row nav">
-        <button class="btn big" data-nav="-1">‹ Back</button>
-        <button class="btn primary big" data-nav="1"></button>
-      </div>
-    </div>`;
-    view = 'ask';
-    const input = $('.ask-input', app);
-    input.addEventListener('input', () => {
-      answers[step] = input.value;
-      saver.queue({ answers: answers.slice() });
-      updateAsk(false);
-    });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); move(step + 1); } });
-  };
-
-  const updateAsk = (full = true) => {
-    const input = $('.ask-input', app);
-    app.querySelectorAll('.dot').forEach((d, i) => {
-      d.classList.toggle('on', i === step);
-      d.classList.toggle('filled', !!String(answers[i]).trim());
-    });
-    const filled = !!String(answers[step]).trim();
-    $('[data-nav="1"]', app).textContent = step === n - 1 ? 'Review ›' : filled ? 'Next ›' : 'Skip ›';
-    if (!full) return;
-    $('.ask-prompt', app).textContent = day.prompts[step];
-    $('[data-nav="-1"]', app).disabled = step === 0;
-    input.value = answers[step];
-    input.focus();
-  };
-
-  const drawReview = () => {
-    view = 'review';
-    document.activeElement?.blur?.();
-    app.innerHTML = `<div class="assist screen review-screen">${top}
-      <div class="review-head"><div class="letter-tile md">${esc(day.letter)}</div><p>${esc(name)}’s answers. Tap one to change it.</p></div>
-      <ol class="review">${day.prompts.map((p, i) => `
-        <li><button class="rev" data-step="${i}"><span class="p">${esc(p)}</span>
-        <span class="a ${answers[i] ? '' : 'blank'}">${answers[i] ? esc(answers[i]) : 'tap to answer'}</span></button></li>`).join('')}</ol>
-      <a class="btn primary big" href="#/">All done ✓</a>
-      <p class="fine">${PLAYTEST ? 'You can change these until someone taps Reveal now.' : `You can change these until ${esc(T.clockLabel(G.lockAt(today)))} ET.`}</p>
-    </div>`;
-  };
-
-  const move = (to) => {
-    if (G.isRevealed(today)) { toast('Cards are locked for today.'); go('#/'); return; }
-    step = Math.max(0, Math.min(n, to));
-    if (step >= n) { drawReview(); return; }
-    if (view !== 'ask') drawAsk();
-    updateAsk();
-  };
-
-  app.onclick = (e) => {
-    const nav = e.target.closest('[data-nav]');
-    if (nav && !nav.disabled) { move(step + Number(nav.dataset.nav)); return; }
-    const b = e.target.closest('[data-step]');
-    if (b && !b.disabled) move(+b.dataset.step);
-  };
-  // Tapping Back/Next shouldn't steal focus from the input (keeps the keyboard up).
-  app.onpointerdown = (e) => { if (view === 'ask' && e.target.closest('[data-nav], .dot')) e.preventDefault(); };
-  move(step);
-  iv = setInterval(() => { if (G.isRevealed(today)) { saver.flush(); toast('Cards are locked for today.'); go('#/'); } }, 15000);
-  playCleanup = () => { clearInterval(iv); app.onclick = null; app.onpointerdown = null; saver.flush(); };
-}
+const playActions = { doneEarly: null, assistDone: null };
 
 // --- Day results ----------------------------------------------------------
 
@@ -887,7 +820,8 @@ document.addEventListener('click', async (e) => {
     case 'pick': choosePlayer(el.dataset.name); break;
     case 'start': go('#/play'); break;
     case 'resume': go('#/play'); break;
-    case 'done-early': playActions.doneEarly?.(); break;
+    case 'done-early': playActions.doneEarly?.(el); break;
+    case 'assist-done': playActions.assistDone?.(); break;
     case 'skip':
     case 'unskip': {
       const p = G.assistedById(el.dataset.pid);
