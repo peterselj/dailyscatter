@@ -300,6 +300,69 @@ try {
   await kenny.page.goto('/kenny.html#/day/2026-11-05');
   await kenny.page.waitForSelector('.day-head');
 
+  // --- Playtest mode: works after 1pm, separate data, Reveal / Next day / Wipe.
+  console.log('Playtest mode (Thu 2:00pm, after the real lock)');
+  const dump = async () => (await fetch(`${BASE}/__mock/dump`)).json();
+  const realBefore = JSON.stringify(Object.entries(await dump()).filter(([k]) => !k.startsWith('pt_')));
+  const p1 = await player('pt-josh', ET('14:00'), '/?playtest');
+  p1.page.on('dialog', (d) => d.accept());
+  await join(p1.page, 'Josh');
+  assert.match(await p1.page.innerText('.pt-bar'), /Playtest/);
+  assert.match(await text(p1.page), /You’re first today/i, 'playtest has its own fresh day');
+  await p1.page.click('[data-act=start]');
+  await runUntil(p1.page, '.play .answers');
+  const PL = (await p1.page.innerText('.play .letter-tile')).trim();
+  await p1.page.fill('.answers input[data-i="0"]', `${PL}practice`);
+  await p1.page.fill('.answers input[data-i="1"]', `${PL}same`);
+  await saved(p1.page);
+  await p1.page.click('[data-act=done-early]');
+  await p1.page.waitForSelector('.play.over');
+  await p1.page.click('text=Done');
+
+  const p2 = await player('pt-zach', ET('14:05'), '/?playtest');
+  await join(p2.page, 'Zach');
+  await p2.page.click('[data-act=start]');
+  await runUntil(p2.page, '.play .answers');
+  await p2.page.fill('.answers input[data-i="1"]', `${PL}same`);
+  await saved(p2.page);
+  await p2.page.click('[data-act=done-early]');
+  await p2.page.waitForSelector('.play.over');
+  log('Two players played a practice card after 1pm');
+
+  await p1.page.goto('/');
+  await p1.page.waitForSelector('[data-act=pt-reveal]');
+  await shot(p1.page, '16-playtest-before-reveal');
+  await p1.page.click('[data-act=pt-reveal]');
+  await p1.page.waitForSelector('.day-head');
+  assert.match(await cls(p1.page, 'josh', 1), /dupe/);
+  assert.equal(await pts(p1.page, 'josh', 0), '+1');
+  await shot(p1.page, '17-playtest-revealed');
+  log('"Reveal now" showed practice results immediately');
+
+  await p1.page.click('[data-act=pt-next]');
+  await p1.page.waitForSelector('[data-act=start]');
+  assert.match(await p1.page.innerText('.date'), /Friday, Nov 6/);
+  log('"Next day" moved practice to Friday');
+
+  assert.equal(JSON.stringify(Object.entries(await dump()).filter(([k]) => !k.startsWith('pt_'))), realBefore, 'real games untouched');
+  log('Real game data was not touched');
+
+  await p1.page.click('[data-act=pt-exit]');
+  await p1.page.waitForSelector('.main .card');
+  assert.equal(await p1.page.$('.pt-bar'), null);
+  assert.match(await p1.page.innerText('.date'), /Thursday, Nov 5/);
+  log('Exit returns to the real game');
+
+  await p1.page.goto('/?playtest');
+  await p1.page.waitForSelector('.pt-bar');
+  await p1.page.click('[data-act=settings]');
+  await p1.page.click('[data-act=pt-wipe]');
+  await p1.page.waitForSelector('#toast.show:has-text("wiped")');
+  await p1.page.waitForSelector('.date:has-text("Thursday")');
+  assert.ok(!Object.keys(await dump()).some((k) => k.startsWith('pt_days/') || k.startsWith('pt_meta/')));
+  assert.match(await p1.page.innerText('.date'), /Thursday, Nov 5/);
+  log('Wipe cleared practice days and reset the date');
+
   const stats = await (await fetch(`${BASE}/__mock/stats`)).json();
   log(`Database usage for the whole test: ${stats.reads} reads, ${stats.writes} writes`);
 

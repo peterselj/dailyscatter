@@ -3,41 +3,72 @@ rules_version = '2';
 // Paste this into Firebase console > Firestore Database > Rules, then Publish.
 //
 // There are no logins, so these rules can't tell family members apart. What they
-// do: allow only the two collections the app uses, only the fields it writes,
-// keep a day's letter and prompts from being changed once rolled, and never
-// allow deleting anything.
+// do: allow only the collections the app uses, only the fields it writes, keep a
+// day's letter and prompts from being changed once rolled, and never allow
+// deleting real games. Playtest data (pt_*) follows the same shape but can be
+// wiped.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /players/{id} {
-      allow read: if true;
-      allow create, update: if id.matches('^[a-z][a-z0-9]{0,23}$')
+    function playerOk(id) {
+      return id.matches('^[a-z][a-z0-9]{0,23}$')
         && request.resource.data.keys().hasOnly(['name', 'lastSeen'])
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 30;
-      allow delete: if false;
     }
 
-    match /days/{day} {
-      allow read: if true;
-
-      // The first person of the day rolls the letter.
-      allow create: if day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+    // The first person of the day rolls the letter.
+    function rollOk(day) {
+      return day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.keys().hasOnly(['letter', 'prompts', 'rolledBy', 'rolledAt', 'title'])
         && request.resource.data.letter is string
         && request.resource.data.letter.matches('^[A-Z]$')
         && request.resource.data.prompts is list
         && request.resource.data.prompts.size() == 5;
+    }
 
-      // Cards, flags, "same as" merges and admin overrides are added later,
-      // but the roll itself can't be redone.
-      allow update: if request.resource.data.keys().hasOnly(
-          ['letter', 'prompts', 'rolledBy', 'rolledAt', 'title', 'cards', 'flags', 'merges', 'overrides'])
+    // Cards, flags, "same as" merges and admin overrides are added later,
+    // but the roll itself can't be redone.
+    function dayUpdateOk(extraKeys) {
+      return request.resource.data.keys().hasOnly(
+          ['letter', 'prompts', 'rolledBy', 'rolledAt', 'title', 'cards', 'flags', 'merges', 'overrides'].concat(extraKeys))
         && request.resource.data.letter == resource.data.letter
         && request.resource.data.prompts == resource.data.prompts
         && request.resource.data.rolledAt == resource.data.rolledAt;
+    }
 
+    // --- The real game ---
+    match /players/{id} {
+      allow read: if true;
+      allow create, update: if playerOk(id);
       allow delete: if false;
+    }
+    match /days/{day} {
+      allow read: if true;
+      allow create: if rollOk(day);
+      allow update: if dayUpdateOk([]);
+      allow delete: if false;
+    }
+
+    // --- Playtest (practice) data ---
+    match /pt_players/{id} {
+      allow read: if true;
+      allow create, update: if playerOk(id);
+      allow delete: if true;
+    }
+    match /pt_days/{day} {
+      allow read: if true;
+      allow create: if rollOk(day);
+      allow update: if dayUpdateOk(['revealedAt']);
+      allow delete: if true;
+    }
+    match /pt_meta/clock {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['dayShift'])
+        && request.resource.data.dayShift is int
+        && request.resource.data.dayShift >= 0
+        && request.resource.data.dayShift < 400;
+      allow delete: if true;
     }
   }
 }

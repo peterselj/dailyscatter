@@ -76,3 +76,11 @@ export async function setDoc(path, data, { mask, exists } = {}) {
   const doc = await call('PATCH', path, { query, body: { fields: encFields(data) } });
   return decFields(doc.fields);
 }
+
+export async function deleteDoc(path) {
+  try {
+    await call('DELETE', path);
+  } catch (e) {
+    if (e.status !== 404) throw e;
+  }
+}

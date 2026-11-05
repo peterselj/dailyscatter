@@ -4,11 +4,17 @@ import * as T from './time.js';
 import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js';
 import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js';
 import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js';
+import { PLAYTEST } from './mode.js';
+
+// Playtest data lives in its own collections so it never mixes with real games.
+const DAYS = PLAYTEST ? 'pt_days' : 'days';
+const PLAYERS = PLAYTEST ? 'pt_players' : 'players';
+const CLOCK = 'pt_meta/clock';
 
 // Cache of day documents: id -> data, or null if nobody has rolled that day.
 export const days = {};
 
-const dayPath = (id) => `days/${id}`;
+const dayPath = (id) => `${DAYS}/${id}`;
 
 export async function loadDay(id) {
   days[id] = await db.getDoc(dayPath(id));
@@ -25,17 +31,17 @@ export async function loadWeek(wid, upTo, { onlyFresh } = {}) {
 }
 
 export async function loadAllDays() {
-  const list = await db.listDocs('days');
+  const list = await db.listDocs(DAYS);
   for (const { id, data } of list) days[id] = data;
   return list.map((d) => d.id).sort();
 }
 
 export async function listPlayers() {
-  return (await db.listDocs('players')).map(({ id, data }) => ({ id, name: data.name || id }));
+  return (await db.listDocs(PLAYERS)).map(({ id, data }) => ({ id, name: data.name || id }));
 }
 
 export async function savePlayer(id, name) {
-  await db.setDoc(`players/${id}`, { name, lastSeen: Date.now() }, { mask: ['name', 'lastSeen'] });
+  await db.setDoc(`${PLAYERS}/${id}`, { name, lastSeen: Date.now() }, { mask: ['name', 'lastSeen'] });
 }
 
 // "Josh" -> "josh"; "Mary Ann" -> "maryann". Null if nothing usable.
@@ -72,8 +78,50 @@ export async function rollDay(today, rollerName) {
   return days[today];
 }
 
+// --- Time: real days lock at 1pm ET; playtest days lock when someone taps Reveal.
+
+let dayShift = 0; // playtest only: how many days "Next day" has moved us forward
+
+export async function loadClock() {
+  if (!PLAYTEST) return;
+  dayShift = (await db.getDoc(CLOCK))?.dayShift ?? 0;
+}
+
+export function todayId() {
+  return PLAYTEST ? T.addDays(T.dayId(), dayShift) : T.dayId();
+}
+
+export function lockAt(dayId) {
+  if (!PLAYTEST) return T.lockTime(dayId);
+  if (dayId < todayId()) return -Infinity;
+  return days[dayId]?.revealedAt ?? Infinity;
+}
+
+export function isRevealed(dayId, now = Date.now()) {
+  return now >= lockAt(dayId);
+}
+
+export async function revealNow(dayId) {
+  if (days[dayId]) await writeDay(dayId, { revealedAt: Date.now() }, ['revealedAt']);
+}
+
+export async function nextDay() {
+  await loadClock();
+  dayShift += 1;
+  await db.setDoc(CLOCK, { dayShift });
+}
+
+export async function wipePlaytest() {
+  if (!PLAYTEST) return;
+  const list = await db.listDocs(DAYS);
+  await Promise.all(list.map(({ id }) => db.deleteDoc(`${DAYS}/${id}`)));
+  await db.deleteDoc(CLOCK);
+  for (const k of Object.keys(days)) delete days[k];
+  dayShift = 0;
+}
+
 export function deadline(card, dayId) {
-  const lock = T.lockTime(dayId);
+  const lock = lockAt(dayId);
   if (!card?.startedAt) return lock;
   if (card.assisted) return lock;
   return Math.min(card.startedAt + TIMER_SECONDS * 1000, lock, card.doneAt ?? Infinity);

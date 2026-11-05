@@ -25,6 +25,16 @@ Players listed in `ASSISTED_PLAYERS` (in `js/config.js`) play with a helper's ph
 
 Open the site in Safari, tap **Share**, then **Add to Home Screen**. For Kenny, open `…/dailyscatter/kenny.html` and do the same. Each icon remembers who it's for.
 
+## Playtest mode
+
+Open **https://peterselj.github.io/dailyscatter/?playtest** to practice any time of day:
+- **Separate data:** playtest uses its own practice data. Nothing there touches the real game or the real scores.
+- **No 1pm wait:** tap **Reveal now** in the yellow banner to see results right away.
+- **Next day ›** jumps the practice game forward a day, so you can play through a whole week and watch the Monday reset.
+- **Exit** returns to the real game. **⚙︎ → Wipe all playtest data** starts the practice over.
+
+Playtest stays on for that phone until you tap Exit. Everyone in playtest shares the same practice game, so you can test with a few family members at once.
+
 ## One-time setup (already done unless noted)
 
 1. **GitHub Pages:** in the repo, go to Settings → Pages → Deploy from a branch → `main`, folder `/ (root)`.

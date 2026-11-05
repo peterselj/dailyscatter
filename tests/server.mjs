@@ -73,6 +73,11 @@ function handleMock(req, res, url, body) {
     docs.set(p, d);
     return send(res, 200, { name, ...d });
   }
+  if (req.method === 'DELETE') {
+    stats.writes++;
+    docs.delete(p);
+    return send(res, 200, {});
+  }
   return err(res, 405, 'METHOD', 'nope');
 }
 
@@ -81,6 +86,16 @@ function handleMock(req, res, url, body) {
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
 async function proxy(req, res, url, body) {
   if (url.pathname === '/__mock/stats') return send(res, 200, { reads: 'n/a', writes: 'n/a' });
+  if (url.pathname === '/__mock/dump') {
+    // Read every collection the app uses, as the owner (bypasses rules).
+    const out = {};
+    const base = `http://${EMULATOR}/v1/projects/dailyscatter-f0771/databases/(default)/documents`;
+    for (const c of ['days', 'players', 'pt_days', 'pt_players', 'pt_meta']) {
+      const r = await (await fetch(`${base}/${c}?pageSize=300`, { headers: { Authorization: 'Bearer owner' } })).json();
+      for (const d of r.documents ?? []) out[d.name.split('/documents/')[1]] = { fields: d.fields };
+    }
+    return send(res, 200, out);
+  }
   const r = await fetch(`http://${EMULATOR}${url.pathname.replace('/__mock', '')}${url.search}`, {
     method: req.method, body: body || undefined, headers: body ? { 'Content-Type': 'application/json' } : {},
   });

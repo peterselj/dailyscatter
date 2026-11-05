@@ -2,6 +2,7 @@ import * as T from './time.js';
 import * as G from './game.js';
 import { scoreDay, scoreWeek, hasPlayed, isValid } from './scoring.js';
 import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js';
+import { PLAYTEST, exitPlaytest } from './mode.js';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -65,7 +66,7 @@ const S = {
   famOk: store.get('ds.fam') === true,
   me: store.get('ds.me'), // { id, name }
   admin: store.get('ds.admin') === true,
-  today: T.dayId(),
+  today: G.todayId(),
   loaded: false,
   error: null,
 };
@@ -96,7 +97,8 @@ let playCleanup = null;
 
 async function render() {
   if (playCleanup) { playCleanup(); playCleanup = null; }
-  S.today = T.dayId();
+  if (PLAYTEST) { try { await G.loadClock(); } catch { /* offline */ } }
+  S.today = G.todayId();
 
   if (!S.famOk || (!S.me && !AS)) return renderGate();
 
@@ -127,12 +129,28 @@ function shell(active, body) {
       <a href="#/" class="brand"><span class="brand-tile">S</span>Daily Scatter</a>
       <button class="who" data-act="settings" aria-label="Settings">${who}<span class="gear" aria-hidden="true">⚙︎</span></button>
     </header>
+    ${PLAYTEST ? playtestBar() : ''}
     <main class="main">${body}</main>
     <nav class="tabs">
       ${tab('today', 'Today', '☀︎')}
       ${tab('week', 'This week', '★︎')}
       ${tab('past', 'Past weeks', '↺︎')}
     </nav>`;
+}
+
+// --- Playtest controls -----------------------------------------------------
+
+function playtestBar() {
+  const day = G.days[S.today];
+  const canReveal = day && !revealed(S.today);
+  return `<div class="pt-bar">
+    <p><strong>🧪 Playtest</strong> · practice only, nothing here counts</p>
+    <div class="pt-actions">
+      ${canReveal ? '<button class="btn sm primary" data-act="pt-reveal">Reveal now</button>' : ''}
+      <button class="btn sm" data-act="pt-next">Next day ›</button>
+      <button class="btn sm ghost" data-act="pt-exit">Exit</button>
+    </div>
+  </div>`;
 }
 
 // --- Gate: family code + name ----------------------------------------------
@@ -192,7 +210,7 @@ async function viewToday() {
   await G.loadWeek(T.weekId(today), today, { onlyFresh: [today] });
   const day = G.days[today];
   const now = Date.now();
-  const lock = T.lockTime(today);
+  const lock = G.lockAt(today);
   const locked = now >= lock;
 
   let html = `<h2 class="date">${esc(T.dayLabel(today, true))}</h2>`;
@@ -208,7 +226,7 @@ async function viewToday() {
   html += AS ? assistedCard(day, mainId, mainName, now, lock, true) : myCard(day, now, lock);
   if (!AS) for (const p of ASSISTED_PLAYERS) html += assistedCard(day, p.id, p.name, now, lock, false);
   html += whoPlayed(day, now);
-  html += `<p class="fine">Cards lock and answers are revealed at ${esc(T.clockLabel(lock))} ET · in ${esc(T.durationLabel(lock - now))}</p>`;
+  html += `<p class="fine">${revealPhrase(today, now)}</p>`;
   return html + weekTeaser();
 }
 
@@ -244,7 +262,7 @@ function myCard(day, now, lock) {
   return `<section class="card">
     <p class="eyebrow ok">✓ You’re locked in</p>
     ${answerList(day, card)}
-    <p class="fine">Everyone’s answers appear at ${esc(T.clockLabel(lock))} ET.</p>
+    <p class="fine">${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : `Everyone’s answers appear at ${esc(T.clockLabel(lock))} ET.`}</p>
   </section>`;
 }
 
@@ -259,7 +277,7 @@ function answerList(day, card) {
 function assistedCard(day, pid, name, now, lock, isMain) {
   const card = day?.cards?.[pid];
   const filled = (card?.answers ?? []).filter((a) => String(a).trim()).length;
-  const left = `Locks in ${T.durationLabel(lock - now)}`;
+  const left = lockPhrase(S.today, now);
   let status, actions;
   if (card?.skipped) {
     status = `😴 ${esc(name)} is sitting out today.`;
@@ -300,7 +318,19 @@ function weekTeaser() {
 }
 
 function revealed(dayId, now = Date.now()) {
-  return T.isLocked(dayId, now);
+  return G.isRevealed(dayId, now);
+}
+
+// "Locks in 2h 10m" (or the playtest equivalent).
+function lockPhrase(dayId, now = Date.now()) {
+  if (PLAYTEST) return 'Open until someone taps Reveal now';
+  return `Locks in ${T.durationLabel(G.lockAt(dayId) - now)}`;
+}
+
+function revealPhrase(dayId, now = Date.now()) {
+  if (PLAYTEST) return 'Playtest: answers appear when someone taps <strong>Reveal now</strong> above.';
+  const lock = G.lockAt(dayId);
+  return `Cards lock and answers are revealed at ${esc(T.clockLabel(lock))} ET · in ${esc(T.durationLabel(lock - now))}`;
 }
 
 function currentWeekScores(wid) {
@@ -316,7 +346,7 @@ async function renderPlay(pid, name, assisted) {
   let day, card;
   try {
     day = G.days[today] ?? await G.loadDay(today);
-    if (T.isLocked(today)) { toast('Today’s cards are locked.'); go('#/'); return; }
+    if (G.isRevealed(today)) { toast('Today’s cards are locked.'); go('#/'); return; }
     const isNew = !day;
     if (!day) day = await G.rollDay(today, AS ? helped.name : S.me.name);
     card = day.cards?.[pid];
@@ -479,7 +509,6 @@ function playAssisted(day, pid, name, card) {
 
   const draw = () => {
     const n = day.prompts.length;
-    const lockLeft = T.lockTime(today) - Date.now();
     const dots = day.prompts.map((_, i) =>
       `<button class="dot ${i === step ? 'on' : ''} ${String(answers[i]).trim() ? 'filled' : ''}" data-step="${i}" aria-label="Category ${i + 1}"></button>`).join('');
     const head = `
@@ -487,7 +516,7 @@ function playAssisted(day, pid, name, card) {
         <a href="#/" class="back" aria-label="Back">‹ Save &amp; close</a>
         <span class="save" aria-live="polite"></span>
       </div>
-      <p class="ast-who">${esc(name)}’s card · locks in ${esc(T.durationLabel(lockLeft))}</p>`;
+      <p class="ast-who">${esc(name)}’s card · ${esc(lockPhrase(today).toLowerCase())}</p>`;
     if (step >= n) {
       app.innerHTML = `<div class="assist">${head}
         <div class="letter-tile lg center">${esc(day.letter)}</div>
@@ -495,7 +524,7 @@ function playAssisted(day, pid, name, card) {
           <li><button class="rev" data-step="${i}"><span class="p">${esc(p)}</span>
           <span class="a ${answers[i] ? '' : 'blank'}">${answers[i] ? esc(answers[i]) : 'tap to answer'}</span></button></li>`).join('')}</ol>
         <a class="btn primary big" href="#/">All done ✓</a>
-        <p class="fine">You can change these until ${esc(T.clockLabel(T.lockTime(today)))} ET.</p>
+        <p class="fine">${PLAYTEST ? 'You can change these until someone taps Reveal now.' : `You can change these until ${esc(T.clockLabel(G.lockAt(today)))} ET.`}</p>
       </div>`;
     } else {
       app.innerHTML = `<div class="assist">${head}
@@ -524,7 +553,7 @@ function playAssisted(day, pid, name, card) {
     }
   };
   const move = (to) => {
-    if (T.isLocked(today)) { toast('Cards are locked for today.'); go('#/'); return; }
+    if (G.isRevealed(today)) { toast('Cards are locked for today.'); go('#/'); return; }
     step = Math.max(0, Math.min(day.prompts.length, to));
     draw();
   };
@@ -533,7 +562,7 @@ function playAssisted(day, pid, name, card) {
     if (b && !b.disabled) move(+b.dataset.step);
   };
   draw();
-  iv = setInterval(() => { if (T.isLocked(today)) { saver.flush(); toast('Cards are locked for today.'); go('#/'); } }, 15000);
+  iv = setInterval(() => { if (G.isRevealed(today)) { saver.flush(); toast('Cards are locked for today.'); go('#/'); } }, 15000);
   playCleanup = () => { clearInterval(iv); app.onclick = null; saver.flush(); };
 }
 
@@ -545,7 +574,7 @@ async function viewDay(id, { embedded = false } = {}) {
   const top = embedded ? '' : `<a class="back" href="#/week/${T.weekId(id)}">‹ Week of ${esc(T.monthDay(T.weekId(id)))}</a><h2 class="date">${esc(T.dayLabel(id, true))}</h2>`;
   if (!day) return `${top}<div class="card empty"><p>Nobody played this day.</p></div>`;
   if (!revealed(id)) {
-    return `${top}<div class="card empty"><p>Answers are revealed at ${esc(T.clockLabel(T.lockTime(id)))} ET.</p></div>`;
+    return `${top}<div class="card empty"><p>${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : `Answers are revealed at ${esc(T.clockLabel(G.lockAt(id)))} ET.`}</p></div>`;
   }
   const { players, order } = scoreDay(day);
   const playing = order.filter((pid) => players[pid].played);
@@ -767,6 +796,7 @@ function openSettings() {
       <hr>
       ${S.admin ? `<p class="label">Admin mode is on</p><p class="fine">Tap any revealed answer to set its points or confirm “same as” matches.</p><button class="btn" data-act="admin-off">Turn off admin mode</button>`
         : `<form data-form="admin" class="form inline"><input name="code" placeholder="Admin code" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Admin code"><button class="btn">Unlock</button></form>`}
+      ${PLAYTEST ? '<hr><p class="label">Playtest</p><p class="fine">Practice data is separate from the real game.</p><button class="btn" data-act="pt-wipe">Wipe all playtest data</button>' : ''}
       <button class="btn ghost big" data-act="close">Close</button>
     </div>`;
   sheetEl.classList.add('open');
@@ -812,6 +842,24 @@ document.addEventListener('click', async (e) => {
     case 'admin-off':
       S.admin = false; store.del('ds.admin'); closeSheet(); render(); toast('Admin mode off.'); break;
     case 'close': closeSheet(); break;
+    case 'pt-reveal':
+      el.disabled = true;
+      try { await G.revealNow(S.today); } catch (err) { fail(err); }
+      go('#/');
+      break;
+    case 'pt-next':
+      if (!confirm('Jump ahead to the next day? (Playtest only.)')) break;
+      el.disabled = true;
+      try { await G.nextDay(); } catch (err) { fail(err); }
+      go('#/');
+      break;
+    case 'pt-exit': exitPlaytest(); break;
+    case 'pt-wipe':
+      if (!confirm('Delete all playtest days and scores? Real games are not affected.')) break;
+      try { await G.wipePlaytest(); toast('Playtest data wiped.'); } catch (err) { fail(err); }
+      closeSheet();
+      go('#/');
+      break;
     default: break;
   }
 });
@@ -837,14 +885,14 @@ function maybeRefresh(force = false) {
   if (document.hidden || sheetEl.classList.contains('open')) return;
   const r = route().name;
   if (r === 'play' || r === 'help' || !S.famOk || (!S.me && !AS)) return;
-  if (force || Date.now() - lastRefresh > 30000 || T.dayId() !== S.today) { lastRefresh = Date.now(); render(); }
+  if (force || Date.now() - lastRefresh > 30000 || G.todayId() !== S.today) { lastRefresh = Date.now(); render(); }
 }
 setInterval(() => maybeRefresh(), 5000);
 document.addEventListener('visibilitychange', () => maybeRefresh(true));
 
 // Reveal moment: re-render right at 1pm if the page is open.
 setInterval(() => {
-  const lock = T.lockTime(S.today);
+  const lock = G.lockAt(S.today);
   const now = Date.now();
   if (now >= lock && now - lock < 5000) maybeRefresh(true);
 }, 4000);
@@ -854,6 +902,8 @@ setInterval(() => {
   if (S.famOk) {
     const pids = [S.me?.id, ...ASSISTED_PLAYERS.map((p) => p.id)].filter(Boolean);
     try {
+      await G.loadClock();
+      S.today = G.todayId();
       await G.loadDay(S.today);
       await Promise.all(pids.map((pid) => syncBackup(S.today, pid)));
     } catch { /* offline; render will show it */ }
