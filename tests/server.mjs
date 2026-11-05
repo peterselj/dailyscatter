@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 
-let docs = new Map(); // "days/2026-11-05" -> { fields, createTime, updateTime }
+let docs = new Map();
+let fakeVersion = null; // tests: pretend a newer release is live // "days/2026-11-05" -> { fields, createTime, updateTime }
 export const stats = { writes: 0, reads: 0 };
 
 const err = (res, code, status, message) => send(res, code, { error: { code, status, message } });
@@ -110,6 +111,7 @@ export function createServer() {
     for await (const chunk of req) body += chunk;
     if (EMULATOR && url.pathname.startsWith('/__mock/')) return proxy(req, res, url, body);
     if (url.pathname === '/__mock/reset') { docs = new Map(); stats.writes = stats.reads = 0; return send(res, 200, {}); }
+    if (url.pathname === '/__mock/fake-version') { fakeVersion = url.searchParams.get('v'); return send(res, 200, {}); }
     if (url.pathname === '/__mock/dump') return send(res, 200, Object.fromEntries(docs));
     if (url.pathname === '/__mock/stats') return send(res, 200, stats);
     if (url.pathname.startsWith('/__mock/')) return handleMock(req, res, url, body);
@@ -117,7 +119,8 @@ export function createServer() {
     if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
     if (url.pathname.endsWith('/')) file = path.join(file, 'index.html');
     try {
-      const data = await fs.readFile(file);
+      let data = await fs.readFile(file);
+      if (fakeVersion && file.endsWith('.html')) data = data.toString().replace(/\?v=[\w-]+/g, `?v=${fakeVersion}`);
       res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
       res.end(data);
     } catch {

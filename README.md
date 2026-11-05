@@ -8,7 +8,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 - **At 1:00pm Eastern:** cards lock and everyone's answers are revealed.
   - An answer that **matches** someone else's on the same category is struck out for everyone who wrote it. Matching ignores capitals, punctuation, accents and a leading "the/a/an."
   - An answer that **doesn't start with the letter** scores 0.
-  - You can't use the **same answer twice** on your own card. The app warns you and clears the repeat, and a repeat would score 0 anyway.
+  - You can't use the **same answer twice** on your own card. The box turns red, the repeat is cleared when you leave it, and a repeat would score 0 anyway.
   - Every other answer scores **1 point per word that starts with the letter**, skipping little words like "of" and "and." So "Mickey Mantle" for M is worth 2.
 - **Reviewing:** anyone can tap an answer to 🚩 **flag** it, or to say it's **the same as** another answer (say, a typo). Only the admin can change scores: nudge any answer's points up or down with − / + (say "To Tell the Truth" deserves 3), or confirm a "same as."
 - **Weekly:** weeks run Monday to Sunday. Scores reset every Monday, and past weeks (with winners) stay under **Past weeks**.
@@ -84,6 +84,8 @@ npm test              # unit tests: scoring, time zones, prompts
 npm run e2e           # plays several full days on emulated iPhones (screenshots in tests/screens/)
 npm run serve         # local copy at http://localhost:8080 using an in-memory fake database
 ```
+
+**Updates reach phones on their own.** An open app checks for a newer version every few minutes and whenever it's reopened, then reloads itself, though never in the middle of a card. ⚙︎ Settings shows the version a phone is running.
 
 **Before every release, run `npm run stamp`.** It puts a fresh version number on every file reference (`?v=…`), so phones download a matching set of new files instead of mixing old cached ones with new ones. A unit test fails if a reference is unstamped or the stamps don't match.
 

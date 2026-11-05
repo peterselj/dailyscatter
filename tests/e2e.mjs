@@ -121,8 +121,14 @@ try {
 
   // Typing an answer he already used: warned while typing, cleared on leaving the box.
   await josh.page.click('.answers input[data-i="4"]');
+  const bg = (i) => josh.page.$eval(`.ans:nth-child(${i})`, (el) => getComputedStyle(el).backgroundColor);
+  assert.equal(await bg(5), 'rgb(252, 239, 200)', 'the box being typed in is highlighted yellow');
+  assert.equal(await bg(1), 'rgba(0, 0, 0, 0)', 'other boxes are not highlighted');
   await josh.page.keyboard.type(`${L}ALPHA!`);
-  assert.match(await josh.page.innerText('.ans:nth-child(5) .rep-msg'), /Already used for #1/);
+  const h0 = await josh.page.$eval('.ans:nth-child(5)', (el) => el.getBoundingClientRect().height);
+  assert.equal(await bg(5), 'rgb(251, 227, 220)', 'it turns red when it repeats an earlier answer');
+  assert.equal(await bg(1), 'rgba(0, 0, 0, 0)', 'the earlier answer itself is not marked');
+  assert.equal(await josh.page.$eval('.ans:nth-child(5)', (el) => el.getBoundingClientRect().height), h0, 'nothing jumps when it turns red');
   await josh.page.keyboard.press('Enter'); // last box: Enter leaves it
   assert.equal(await josh.page.inputValue('.answers input[data-i="4"]'), '');
   assert.match(await josh.page.innerText('#toast'), /already your answer for #1/);
@@ -321,6 +327,20 @@ try {
   assert.match(shared, /Daily Scatter/);
   assert.match(shared, /Kenny 5/);
   log(`Share text:\n${shared.split('\n').map((s) => `        ${s}`).join('\n')}`);
+
+  // Auto-update: when a newer version is published, an open app reloads itself.
+  const vBefore = await josh.page.evaluate(() => document.querySelector('script[type=module]').src.match(/v=([\w-]+)/)[1]);
+  await fetch(`${BASE}/__mock/fake-version?v=209901010000`);
+  const nav = josh.page.waitForURL((u) => u.search.includes('v=209901010000'), { timeout: 10000 }).catch(() => null);
+  await josh.page.clock.runFor(5 * 60_000 + 1000);
+  await nav;
+  await josh.page.waitForSelector('.board, .main .card');
+  await josh.page.click('[data-act=settings]');
+  assert.match(await josh.page.innerText('.version'), /209901010000/);
+  assert.ok(!josh.page.url().includes('v='), 'address bar tidied after the update');
+  await josh.page.click('[data-act=close]');
+  await fetch(`${BASE}/__mock/fake-version?v=`);
+  log(`A newer release (${vBefore} -> 209901010000) was picked up by an open app, which reloaded itself`);
 
   // --- Day 2 (Fri): Kenny sits out from his own page; two people roll at once.
   console.log('Day 2 (Fri Nov 6)');
