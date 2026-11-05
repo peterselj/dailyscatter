@@ -378,3 +378,11 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 
 .you { font-size: 16px; margin: 0 0 6px; }
 .version { text-align: center; font-size: 12px; color: var(--dim); margin: 0; }
+
+/* --- Today: yesterday's results + this week -------------------------------- */
+.yday { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.yday .yd-text { flex: 1; min-width: 0; }
+.yday .eyebrow { margin-bottom: 2px; }
+.week-mini .wm-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.week-mini .label { margin: 0; }
+.wm-link { color: var(--accent); font-weight: 700; font-size: 15px; text-decoration: none; }

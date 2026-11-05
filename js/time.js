@@ -3,7 +3,8 @@
 // A "week id" is the day id of that week's Monday.
 
 export const TZ = 'America/New_York';
-export const LOCK_HOUR = 13; // cards lock and results reveal at 1:00pm Eastern
+// Each day's card stays open all day; it closes, and everyone's answers are
+// revealed, at midnight Eastern (the start of the next day).
 
 const partsFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: TZ, hourCycle: 'h23',
@@ -40,12 +41,13 @@ export function etInstant(id, hour, minute = 0) {
   const { y, m, d } = parseDay(id);
   const guess = Date.UTC(y, m - 1, d, hour, minute);
   // Sample the offset within an hour of the target instant (ET is UTC-4/-5).
-  // DST switches happen at 2am, so this is exact for any hour from 4am to midnight.
+  // DST switches happen at 2am, so this is exact for midnight and for 4am onward.
   return guess - etOffset(guess + 4.5 * 3600e3);
 }
 
+// When a day's card closes: midnight Eastern at the end of that day.
 export function lockTime(id) {
-  return etInstant(id, LOCK_HOUR);
+  return etInstant(addDays(id, 1), 0);
 }
 
 export function isLocked(id, now = Date.now()) {

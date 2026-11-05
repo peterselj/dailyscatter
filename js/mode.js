@@ -1,5 +1,5 @@
 // Playtest mode: open the site with ?playtest to turn it on (it sticks on this
-// device until you tap Exit). Playtest uses separate data, has no 1pm lock
+// device until you tap Exit). Playtest uses separate data, has no midnight wait
 // (anyone can tap "Reveal now"), and has a "Next day" button to move time along.
 
 const KEY = 'ds.playtest';

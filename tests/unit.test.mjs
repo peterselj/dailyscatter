@@ -168,13 +168,20 @@ test('day ids follow Eastern time, not UTC', () => {
   assert.equal(T.dayId(Date.parse('2026-07-04T04:00:00Z')), '2026-07-04');
 });
 
-test('lock time is 1pm Eastern, across daylight saving', () => {
-  assert.equal(new Date(T.lockTime('2026-11-05')).toISOString(), '2026-11-05T18:00:00.000Z'); // EST
-  assert.equal(new Date(T.lockTime('2026-07-04')).toISOString(), '2026-07-04T17:00:00.000Z'); // EDT
-  assert.equal(new Date(T.lockTime('2026-11-01')).toISOString(), '2026-11-01T18:00:00.000Z'); // fall-back day
-  assert.equal(new Date(T.lockTime('2026-03-08')).toISOString(), '2026-03-08T17:00:00.000Z'); // spring-forward day
-  assert.equal(T.isLocked('2026-11-05', Date.parse('2026-11-05T17:59:59Z')), false);
-  assert.equal(T.isLocked('2026-11-05', Date.parse('2026-11-05T18:00:00Z')), true);
+test('cards close at midnight Eastern at the end of the day, across daylight saving', () => {
+  assert.equal(new Date(T.lockTime('2026-11-05')).toISOString(), '2026-11-06T05:00:00.000Z'); // EST
+  assert.equal(new Date(T.lockTime('2026-07-04')).toISOString(), '2026-07-05T04:00:00.000Z'); // EDT
+  assert.equal(new Date(T.lockTime('2026-10-31')).toISOString(), '2026-11-01T04:00:00.000Z'); // night before fall-back
+  assert.equal(new Date(T.lockTime('2026-11-01')).toISOString(), '2026-11-02T05:00:00.000Z'); // fall-back day
+  assert.equal(new Date(T.lockTime('2026-03-07')).toISOString(), '2026-03-08T05:00:00.000Z'); // night before spring-forward
+  assert.equal(new Date(T.lockTime('2026-03-08')).toISOString(), '2026-03-09T04:00:00.000Z'); // spring-forward day
+  assert.equal(T.isLocked('2026-11-05', Date.parse('2026-11-06T04:59:59Z')), false); // 11:59:59pm
+  assert.equal(T.isLocked('2026-11-05', Date.parse('2026-11-06T05:00:00Z')), true); // midnight
+  // The lock is always the moment the next day begins.
+  for (const id of ['2026-01-15', '2026-03-08', '2026-06-30', '2026-11-01', '2026-12-31']) {
+    assert.equal(T.dayId(T.lockTime(id)), T.addDays(id, 1));
+    assert.equal(T.dayId(T.lockTime(id) - 1), id);
+  }
 });
 
 test('weeks run Monday to Sunday', () => {
