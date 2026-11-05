@@ -1,8 +1,8 @@
-import * as T from './time.js?v=202611052150';
-import * as G from './game.js?v=202611052150';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611052150';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611052150';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611052150';
+import * as T from './time.js?v=202611052217';
+import * as G from './game.js?v=202611052217';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611052217';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611052217';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611052217';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -250,20 +250,41 @@ async function viewToday() {
 
   let html = `<h2 class="date">${esc(T.dayLabel(today, true))}</h2>`;
   if (day?.title) html += `<p class="special">✨ ${esc(day.title)}</p>`;
-  html += yesterdayCard(yid);
 
   if (locked) { // only happens in playtest, after "Reveal now"
     html += day ? await viewDay(today, { embedded: true }) : '<div class="card empty"><p>Nobody played today. A new card opens at midnight.</p></div>';
-    return html + weekStandings();
+    return html + weekStandings(true);
   }
 
+  // Before you've played: today's card comes first, with nothing to scroll past.
+  // After: a short "locked in" card, then the week's standings.
   const mainId = AS ? AS : S.me.id;
   const mainName = AS ? helped.name : S.me.name;
+  const mine = day?.cards?.[mainId];
+  const done = AS
+    ? !!mine?.skipped || (mine?.answers ?? []).filter((a) => String(a).trim()).length === 5
+    : !!mine?.startedAt && !G.cardOpen(mine, today, now);
+  const helpers = AS ? [] : ASSISTED_PLAYERS.map((p) => {
+    const c = day?.cards?.[p.id];
+    const finished = !!c?.skipped || (c?.answers ?? []).filter((a) => String(a).trim()).length === 5;
+    return { html: assistedCard(day, p.id, p.name, now, lock, false), finished };
+  });
+
   html += AS ? assistedCard(day, mainId, mainName, now, lock, true) : myCard(day, now, lock);
-  if (!AS) for (const p of ASSISTED_PLAYERS) html += assistedCard(day, p.id, p.name, now, lock, false);
+  if (!done) {
+    html += yesterdayLine(yid);
+    html += helpers.map((h) => h.html).join('');
+    html += whoPlayed(day, now);
+    html += `<p class="fine">${revealPhrase(today, now)}</p>`;
+    return html;
+  }
+  html += helpers.filter((h) => !h.finished).map((h) => h.html).join(''); // e.g. Mom's next job: Kenny's card
+  html += weekStandings(true);
+  html += yesterdayLine(yid);
+  html += helpers.filter((h) => h.finished).map((h) => h.html).join('');
   html += whoPlayed(day, now);
   html += `<p class="fine">${revealPhrase(today, now)}</p>`;
-  return html + weekStandings();
+  return html;
 }
 
 function myCard(day, now, lock) {
@@ -295,10 +316,9 @@ function myCard(day, now, lock) {
       <button class="btn primary big" data-act="resume">Back to my card</button>
     </section>`;
   }
-  return `<section class="card">
-    <p class="eyebrow ok">✓ You’re locked in</p>
-    ${answerList(day, card)}
-    <p class="fine">${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : 'Everyone’s answers appear at midnight.'}</p>
+  return `<section class="card locked-in">
+    <p class="eyebrow ok">✓ You’re locked in for today</p>
+    <details><summary>Your answers</summary>${answerList(day, card)}</details>
   </section>`;
 }
 
@@ -349,7 +369,8 @@ function whoPlayed(day, now) {
   return `<section class="card"><p class="label">Played so far</p><div class="chips">${chips}</div></section>`;
 }
 
-function yesterdayCard(yid) {
+// One small line about yesterday, e.g. "Your score yesterday: 5 · 🏆 Zach won ›".
+function yesterdayLine(yid) {
   const day = G.days[yid];
   if (!day || !revealed(yid)) return '';
   const { players, order } = scoreDay(day);
@@ -359,22 +380,19 @@ function yesterdayCard(yid) {
   const champs = playing.filter((p) => players[p].total === top).map((p) => esc(players[p].name)).join(' & ');
   const who = AS || S.me?.id;
   const mine = players[who]?.played ? players[who].total : null;
-  const mineLabel = mine === null ? '' : ` · ${AS ? esc(helped.name) : 'You'}: ${mine}`;
-  return `<a class="card yday" href="#/day/${yid}">
-    <div class="letter-tile sm">${esc(day.letter)}</div>
-    <div class="yd-text"><p class="eyebrow">Yesterday’s results</p>
-      <p><strong>🏆 ${champs}</strong> won with ${top}${mineLabel}</p></div>
-    <span class="chev">›</span>
-  </a>`;
+  const lead = mine === null ? 'Yesterday' : `${AS ? `${esc(helped.name)}’s` : 'Your'} score yesterday: <strong>${mine}</strong>`;
+  return `<a class="yline" href="#/day/${yid}"><span>${lead} · 🏆 ${champs} won${mine === null ? ` with ${top}` : ''}</span><span class="chev">›</span></a>`;
 }
 
-function weekStandings() {
+function weekStandings(placeholder = false) {
   const wid = T.weekId(S.today);
   const { rows, winners } = currentWeekScores(wid);
   if (!rows.length) {
     const pw = T.addDays(wid, -7);
     const last = scoreWeek(T.weekDays(pw).map((id) => ({ id, day: G.days[id] })));
-    if (!last.rows.length) return '';
+    if (!last.rows.length) {
+      return placeholder ? '<section class="card week-mini"><p class="label">This week so far</p><p class="fine">No scores yet. Today’s results show up at midnight.</p></section>' : '';
+    }
     const champs = last.rows.filter((r) => last.winners.includes(r.id)).map((r) => esc(r.name)).join(' & ');
     return `<a class="card teaser" href="#/week/${pw}"><span>New week!</span><strong>Last week: 🏆 ${champs} · ${last.rows[0].total}</strong><span class="chev">›</span></a>`;
   }

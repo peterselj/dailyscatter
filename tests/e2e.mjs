@@ -238,13 +238,15 @@ try {
   const FRI = (hhmm) => ET(hhmm, '2026-11-06');
   await josh.page.clock.setSystemTime(FRI('00:05'));
   await josh.page.goto('/');
-  await josh.page.waitForSelector('.yday');
-  assert.match(await josh.page.innerText('.yday'), /Yesterday.s results[\s\S]*Zach[\s\S]*won with 5 · You: 2/i);
-  assert.match(await josh.page.innerText('.week-mini'), /This week so far[\s\S]*Zach\s+5/i);
+  await josh.page.waitForSelector('.yline');
   assert.match(await text(josh.page), /You\u2019re first today/i, 'Friday has a fresh card');
+  const fold = await josh.page.$eval('[data-act=start]', (el) => el.getBoundingClientRect().bottom);
+  assert.ok(fold <= josh.page.viewportSize().height - 70, `start button visible without scrolling (bottom ${fold})`);
+  assert.match(await josh.page.innerText('.yline'), /Your score yesterday: 2 · 🏆 Zach won/);
+  assert.equal(await josh.page.$('.week-mini'), null, 'standings wait until you have played');
   await shot(josh.page, '09a-next-morning');
-  log('After midnight, Today shows yesterday\u2019s results, the week so far, and a fresh card');
-  await josh.page.click('.yday');
+  log('Next morning: today\u2019s card is first (no scrolling), with one line for yesterday\u2019s score');
+  await josh.page.click('.yline');
   await josh.page.waitForSelector('.day-head');
   await shot(josh.page, '09-results');
   const row = (page, pid, i) => page.$(`.ansrow[data-pid="${pid}"][data-i="${i}"]`);
@@ -381,6 +383,18 @@ try {
   assert.equal(la, lb, 'simultaneous rolls agree on one letter');
   assert.notEqual(la, L, 'letters do not repeat within the week');
   log(`Josh and Zach hit Roll at the same moment; both got ${la}`);
+
+  // After playing, the week's standings are right there.
+  await a.page.click('[data-act=done-early]');
+  await a.page.click('[data-act=done-early]');
+  await a.page.waitForSelector('.play.over');
+  await a.page.click('text=Done');
+  await a.page.waitForSelector('.week-mini');
+  const wm = await a.page.$eval('.week-mini', (el) => el.getBoundingClientRect().top);
+  assert.ok(wm < a.page.viewportSize().height - 150, `standings visible without scrolling (top ${wm})`);
+  assert.match(await a.page.innerText('.week-mini'), /Kenny\s+5/);
+  await shot(a.page, '14a-after-playing');
+  log('After playing, the week\u2019s standings show right under "locked in"');
 
   // Kenny's page sees Thursday's results too.
   await kenny.page.goto('/kenny.html#/day/2026-11-05');
