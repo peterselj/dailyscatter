@@ -119,6 +119,16 @@ try {
   assert.equal(await josh.page.inputValue('.answers input[data-i="1"]'), J[1]);
   log('Reloading mid-game resumes the card with answers intact');
 
+  // Typing an answer he already used: warned while typing, cleared on leaving the box.
+  await josh.page.click('.answers input[data-i="4"]');
+  await josh.page.keyboard.type(`${L}ALPHA!`);
+  assert.match(await josh.page.innerText('.ans:nth-child(5) .rep-msg'), /Already used for #1/);
+  await josh.page.keyboard.press('Enter'); // last box: Enter leaves it
+  assert.equal(await josh.page.inputValue('.answers input[data-i="4"]'), '');
+  assert.match(await josh.page.innerText('#toast'), /already your answer for #1/);
+  await saved(josh.page);
+  log('A repeat of his own answer was flagged while typing and cleared on leaving the box');
+
   await josh.page.clock.runFor(185_000);
   await josh.page.waitForSelector('.play.over');
   assert.equal(await josh.page.isDisabled('.answers input[data-i="0"]'), true);

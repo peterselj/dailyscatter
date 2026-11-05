@@ -360,3 +360,6 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .btn.sm { min-height: 38px; padding: 6px 14px; font-size: 15px; border-radius: 12px; }
 .pt-bar .btn:not(.primary) { background: rgba(255, 255, 255, .7); border-color: transparent; color: var(--gold-ink); }
 .pt-bar .btn.ghost { background: transparent; text-decoration: underline; }
+.rep-msg { font-size: 14px; font-weight: 700; color: var(--accent); }
+.rep-msg:empty { display: none; }
+.ans.repeat input { border-color: var(--accent); text-decoration: line-through; }
