@@ -56,6 +56,23 @@ async function saved(page) {
   await page.waitForSelector('.save[data-state=saved]');
 }
 
+// Simulate the iPhone keyboard: only ~290px of screen left above it.
+async function withKeyboard(page, name, focusSel, measure) {
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: vp.width, height: 290 });
+  await page.waitForTimeout(50);
+  await page.evaluate(() => document.body.classList.add('kb'));
+  if (focusSel) await page.focus(focusSel);
+  await page.clock.runFor(600);
+  await page.waitForTimeout(50);
+  await shot(page, name);
+  const result = await page.evaluate(measure);
+  await page.setViewportSize(vp);
+  await page.waitForTimeout(50);
+  await page.evaluate(() => document.body.classList.remove('kb'));
+  return result;
+}
+
 const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: `tests/screens/${name}.png` }); };
 const text = (page) => page.evaluate(() => document.body.textContent);
 
@@ -80,6 +97,14 @@ try {
   for (let i = 0; i < 5; i++) if (J[i]) await inputs[i].fill(J[i]);
   await saved(josh.page);
   await shot(josh.page, '03-playing');
+  const jk = await withKeyboard(josh.page, '03b-playing-keyboard', '.answers input[data-i="3"]', () => {
+    const head = document.querySelector('.play-top').getBoundingClientRect();
+    const row = document.activeElement.closest('.ans').getBoundingClientRect();
+    const input = document.activeElement.getBoundingClientRect();
+    return { headVisible: head.top >= 0 && head.bottom < 100, rowBelowHead: row.top >= head.bottom - 1, inputAboveKb: input.bottom <= 290 };
+  });
+  assert.deepEqual(jk, { headVisible: true, rowBelowHead: true, inputAboveKb: true }, 'timer, prompt and input all visible above the keyboard');
+  log('With the keyboard up: timer, the focused category and its box all fit');
   log('Josh typed answers; they autosaved');
 
   // Reload mid-timer: card resumes with the same clock and answers.
@@ -141,6 +166,12 @@ try {
   await runUntil(mom.page, '.assist .ask');
   await mom.page.clock.runFor(1000); // let the letter reveal fade out
   await shot(mom.page, '07-kenny-prompt');
+  const kk = await withKeyboard(mom.page, '07b-kenny-keyboard', '.ask-input', () => {
+    const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+    return { prompt: r('.ask-prompt').top >= 0, letter: r('.ask-tile').top >= 0, input: r('.ask-input').bottom <= 290, next: r('.nav .primary').bottom <= 290 };
+  });
+  assert.deepEqual(kk, { prompt: true, letter: true, input: true, next: true }, 'Kenny screen fits above the keyboard');
+  log('Kenny mode with the keyboard up: question, letter, answer box and Next all fit');
   assert.match(await mom.page.innerText('.ask'), /Kenny, what’s/);
   await mom.page.fill('.ask-input', `${L}alpha`); // same as Josh: both get struck
   await mom.page.click('.nav .primary');
@@ -243,15 +274,24 @@ try {
   await josh.page.waitForSelector('.merges li:has-text("confirmed")');
   await josh.page.click('[data-act=close]');
   await josh.page.click('.ansrow[data-pid="josh"][data-i="1"]');
-  await josh.page.click('[data-act=override][data-pts="0"]');
-  await josh.page.waitForSelector('.chip.on[data-pts="0"]');
+  await josh.page.click('[data-act=override][aria-label="One point less"]');
+  await josh.page.waitForSelector('.step-val:text-is("1")');
+  await josh.page.click('[data-act=override][aria-label="One point less"]');
+  await josh.page.waitForSelector('.step-val:text-is("0")');
+  assert.equal(await josh.page.isDisabled('[aria-label="One point less"]'), true);
   await shot(josh.page, '11-admin-sheet');
   await josh.page.click('[data-act=clear-flags]');
   await josh.page.waitForSelector('.sheet-card');
   await josh.page.click('[data-act=close]');
+  // "To Tell the Truth"-style bump: Kenny's 2-pointer is worth 3.
+  await josh.page.click('.ansrow[data-pid="kenny"][data-i="2"]');
+  await josh.page.waitForSelector('.step-val:text-is("2")');
+  await josh.page.click('[data-act=override][aria-label="One point more"]');
+  await josh.page.waitForSelector('.step-val:text-is("3")');
+  await josh.page.click('[data-act=close]');
   const after = Object.fromEntries(await josh.page.$$eval('.standings li', (lis) => lis.map((li) => [li.querySelector('.nm').textContent, li.querySelector('.pts').textContent])));
-  assert.deepEqual(after, { Kenny: '4', Zach: '4', Lowey: '2', Sara: '1', Josh: '0' });
-  log('Admin confirmed the merge and zeroed the flagged answer; scores updated');
+  assert.deepEqual(after, { Kenny: '5', Zach: '4', Lowey: '2', Sara: '1', Josh: '0' });
+  log('Admin confirmed the merge, stepped one answer down to 0 and another up to 3; scores updated');
 
   // Week view + share
   await josh.page.click('a.tab[href="#/week"]');
@@ -261,7 +301,7 @@ try {
   await josh.page.waitForSelector('#toast.show');
   const shared = await josh.page.evaluate(() => navigator.clipboard.readText());
   assert.match(shared, /Daily Scatter/);
-  assert.match(shared, /Kenny 4/);
+  assert.match(shared, /Kenny 5/);
   log(`Share text:\n${shared.split('\n').map((s) => `        ${s}`).join('\n')}`);
 
   // --- Day 2 (Fri): Kenny sits out from his own page; two people roll at once.

@@ -209,45 +209,88 @@ input:disabled { opacity: .7; }
 @keyframes land { 0% { transform: scale(1.4) rotate(12deg); } 100% { transform: scale(1) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) { .roll .spin, .roll .land { animation: none; } }
 
-/* --- Timed play -------------------------------------------------------- */
-.play { padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 24px); }
-.play-top {
-  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between;
-  padding: calc(env(safe-area-inset-top) + 8px) 2px 10px; margin-top: calc(-1 * env(safe-area-inset-top) - 12px);
-  background: var(--bg);
+/* --- Play screens (shared) ------------------------------------------------
+   Sized to the visible area above the iPhone keyboard (--vvh / --vvt are set
+   from window.visualViewport); body.kb = keyboard is open. */
+.screen {
+  position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100dvh);
+  max-width: 560px; margin: 0 auto; z-index: 10; background: var(--bg);
+  display: flex; flex-direction: column;
 }
-.clock { display: flex; flex-direction: column; align-items: flex-end; }
-.clock .t { font-size: 44px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.clock .t.hurry { color: var(--accent); }
-.save { font-size: 13px; color: var(--muted); min-height: 18px; }
+.letter-tile.md { width: 52px; height: 52px; font-size: 32px; border-radius: 13px; }
+.save { font-size: 13px; color: var(--muted); min-height: 18px; white-space: nowrap; }
 .save[data-state=offline] { color: var(--warn); font-weight: 700; }
-.answers { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
-.ans {
-  display: grid; grid-template-columns: 26px 1fr; gap: 4px 8px; align-items: center;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px;
+
+/* --- Timed play -------------------------------------------------------- */
+.play-top {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+  border-bottom: 1px solid var(--line);
 }
-.ans .n { grid-row: 1; font-weight: 800; color: var(--accent); text-align: center; }
-.ans .p { font-weight: 700; }
-.ans input { grid-column: 1 / -1; }
+.play-hint { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); line-height: 1.2; }
+.play-hint strong { color: var(--ink); }
+.clock { display: flex; flex-direction: column; align-items: flex-end; }
+.clock .t { font-size: 38px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.clock .t.hurry { color: var(--accent); }
+.scroller {
+  position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; padding: 10px 16px calc(env(safe-area-inset-bottom) + 16px);
+}
+.answers { display: flex; flex-direction: column; gap: 12px; }
+.ans { display: flex; flex-direction: column; gap: 5px; }
+.ans .p { font-weight: 700; font-size: 16px; line-height: 1.25; display: flex; gap: 8px; }
+.ans .n { color: var(--accent); font-weight: 900; }
+.ans input { padding: 11px 12px; font-size: 18px; }
 .play-foot { margin-top: 16px; text-align: center; }
 .over-msg { font-size: 20px; font-weight: 800; margin-bottom: 12px; }
 .play.over .clock .t { color: var(--muted); }
+.kb-spacer { display: none; }
+
+body.kb .play-top { padding-top: 6px; padding-bottom: 6px; }
+body.kb .play-top .letter-tile.md { width: 40px; height: 40px; font-size: 26px; border-radius: 10px; }
+body.kb .clock .t { font-size: 30px; }
+body.kb .play-hint { font-size: 14px; }
+body.kb .scroller { padding-top: 6px; }
+body.kb .answers { gap: 8px; }
+body.kb .kb-spacer { display: block; height: 60vh; }
 
 /* --- Assisted play ------------------------------------------------------ */
-.assist { padding: calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 24px); }
-.ast-top { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.assist { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(env(safe-area-inset-top) + 4px) 16px calc(env(safe-area-inset-bottom) + 16px); }
+.ast-top { flex: none; display: flex; justify-content: space-between; align-items: center; min-height: 40px; }
 .ast-top .back { margin: 0; font-size: 17px; }
-.ast-who { color: var(--muted); font-weight: 600; margin: 0 0 8px; }
-.dots { display: flex; justify-content: center; gap: 10px; margin: 6px 0 12px; }
-.dot { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); background: var(--card); padding: 0; cursor: pointer; }
+.ast-who { color: var(--muted); font-weight: 600; margin: 0 0 6px; font-size: 15px; }
+.dots { flex: none; display: flex; justify-content: center; gap: 10px; margin: 4px 0 10px; }
+.dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); background: var(--card); padding: 0; cursor: pointer; }
 .dot.filled { background: var(--ok); border-color: var(--ok); }
 .dot.on { outline: 3px solid var(--accent); outline-offset: 2px; }
-.ask { text-align: center; margin: 8px 0 16px; }
-.ask-line { font-size: 22px; color: var(--muted); font-weight: 600; margin: 0; }
-.ask-prompt { font-size: 34px; font-weight: 900; line-height: 1.12; margin: 6px 0 10px; letter-spacing: -.01em; }
-.ask-input { font-size: 22px !important; text-align: center; padding: 16px !important; }
-.nav { margin-top: 14px; }
+.ask { flex: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin: 4px 0 14px; }
+.ask-text { display: flex; flex-direction: column; align-items: center; }
+.ask-tile { order: 2; width: 104px; height: 104px; font-size: 68px; border-radius: 26px; }
+.ask-line { font-size: 21px; color: var(--muted); font-weight: 600; margin: 0; line-height: 1.2; }
+.ask-line strong { display: none; }
+.ask-prompt { font-size: 32px; font-weight: 900; line-height: 1.12; margin: 4px 0 6px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.ask-input { flex: none; font-size: 22px !important; text-align: center; padding: 14px !important; }
+.nav { flex: none; margin-top: 12px; }
 .nav .btn { flex: 1 1 0; }
+
+/* Keyboard open: letter beside the question, everything tighter. */
+body.kb .ast-who { display: none; }
+body.kb .ast-top { min-height: 34px; }
+body.kb .dots { gap: 8px; margin: 0 0 8px; }
+body.kb .dot { width: 20px; height: 20px; }
+body.kb .ask { flex-direction: row; text-align: left; gap: 12px; margin: 0 0 10px; }
+body.kb .ask-text { align-items: flex-start; }
+body.kb .ask-tile { order: 0; width: 66px; height: 66px; font-size: 42px; border-radius: 16px; }
+body.kb .ask-line { font-size: 15px; }
+body.kb .ask-line strong { display: inline; color: var(--ink); }
+body.kb .ask-prompt { font-size: 28px; margin: 1px 0 2px; }
+body.kb .ask-input { padding: 11px !important; font-size: 20px !important; }
+body.kb .nav { margin-top: 8px; }
+body.kb .nav .btn.big { min-height: 46px; }
+
+.review-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+.review-head p { margin: 0; color: var(--muted); font-weight: 600; }
+.review { list-style: none; margin: 0; padding: 0; }
 .review li { margin-bottom: 8px; }
 .rev {
   width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px;
@@ -255,7 +298,12 @@ input:disabled { opacity: .7; }
 }
 .rev .p { font-size: 14px; color: var(--muted); font-weight: 600; }
 .rev .a { font-size: 20px; font-weight: 800; }
-.assist > .btn.big { margin-top: 8px; }
+.assist > .btn.big { margin-top: 8px; flex: none; }
+
+/* --- Admin stepper --------------------------------------------------------- */
+.stepper { display: flex; align-items: center; gap: 14px; }
+.btn.step { width: 56px; height: 56px; font-size: 28px; padding: 0; border-radius: 16px; }
+.step-val { min-width: 48px; text-align: center; font-size: 32px; font-weight: 900; font-variant-numeric: tabular-nums; }
 
 /* --- Results ------------------------------------------------------------- */
 .day-head { display: flex; gap: 16px; align-items: flex-start; }
@@ -348,3 +396,4 @@ input:disabled { opacity: .7; }
 .btn.sm { min-height: 38px; padding: 6px 14px; font-size: 15px; border-radius: 12px; }
 .pt-bar .btn:not(.primary) { background: rgba(255, 255, 255, .7); border-color: transparent; color: var(--gold-ink); }
 .pt-bar .btn.ghost { background: transparent; text-decoration: underline; }
+.assist .review { flex: none; }

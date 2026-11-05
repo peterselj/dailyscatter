@@ -428,6 +428,30 @@ function saveBadge(state) {
   el.textContent = { saving: 'Saving…', saved: 'Saved ✓', offline: 'Offline – retrying' }[state] ?? '';
 }
 
+// --- Keyboard-aware layout ---------------------------------------------------
+// iOS doesn't shrink the page when the keyboard opens; only the "visual
+// viewport" shrinks. The play screens size themselves to it (via --vvh/--vvt)
+// and switch to a compact layout (body.kb) while the keyboard is up.
+const vv = window.visualViewport;
+function syncViewport() {
+  const root = document.documentElement;
+  const h = vv ? vv.height : window.innerHeight;
+  root.style.setProperty('--vvh', `${h}px`);
+  root.style.setProperty('--vvt', `${vv ? vv.offsetTop : 0}px`);
+  document.body.classList.toggle('kb', window.innerHeight - h > 120);
+}
+if (vv) { vv.addEventListener('resize', syncViewport); vv.addEventListener('scroll', syncViewport); }
+window.addEventListener('resize', syncViewport);
+syncViewport();
+
+// Keep the focused answer just below the header, once the keyboard has settled.
+function keepInView(row, scroller) {
+  const go = () => { if (scroller && row) scroller.scrollTop = Math.max(0, row.offsetTop - 6); };
+  go();
+  setTimeout(go, 120);
+  setTimeout(go, 400);
+}
+
 function playTimed(day, pid, card) {
   const today = S.today;
   const answers = (card.answers ?? []).slice();
@@ -436,29 +460,33 @@ function playTimed(day, pid, card) {
   if (bk?.answers && bk.at > (card.updatedAt ?? 0)) bk.answers.forEach((a, i) => { answers[i] = a; });
 
   app.innerHTML = `
-    <div class="play">
+    <div class="play screen">
       <div class="play-top">
-        <div class="letter-tile lg">${esc(day.letter)}</div>
+        <div class="letter-tile md">${esc(day.letter)}</div>
+        <div class="play-hint">Everything starts with <strong>${esc(day.letter)}</strong></div>
         <div class="clock"><span class="t">${esc(T.timerLabel(G.deadline(card, today) - Date.now()))}</span><span class="save" aria-live="polite"></span></div>
       </div>
-      <form class="answers" autocomplete="off" onsubmit="return false">
-        ${day.prompts.map((p, i) => `
-          <label class="ans">
-            <span class="n">${i + 1}</span>
-            <span class="p">${esc(p)}</span>
-            <input data-i="${i}" value="${esc(answers[i])}" maxlength="60" autocapitalize="words" enterkeyhint="${i < 4 ? 'next' : 'done'}" placeholder="${esc(day.letter)}…">
-          </label>`).join('')}
-      </form>
-      <div class="play-foot"><button class="btn big" data-act="done-early">I’m done</button></div>
+      <div class="scroller">
+        <form class="answers" autocomplete="off" onsubmit="return false">
+          ${day.prompts.map((p, i) => `
+            <label class="ans">
+              <span class="p"><span class="n">${i + 1}</span>${esc(p)}</span>
+              <input data-i="${i}" name="a${i}" value="${esc(answers[i])}" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="${i < 4 ? 'next' : 'done'}" placeholder="${esc(day.letter)}…">
+            </label>`).join('')}
+        </form>
+        <div class="play-foot"><button class="btn big" data-act="done-early">I’m done</button></div>
+        <div class="kb-spacer"></div>
+      </div>
     </div>`;
 
   const saver = makeSaver(today, pid, saveBadge);
+  const scroller = $('.scroller', app);
   const inputs = [...app.querySelectorAll('.answers input')];
   const firstEmpty = inputs.find((el) => !el.value) ?? inputs[0];
-  firstEmpty.focus();
 
   inputs.forEach((el) => {
     el.addEventListener('input', () => { answers[+el.dataset.i] = el.value; saver.queue({ answers: answers.slice() }); });
+    el.addEventListener('focus', () => keepInView(el.closest('.ans'), scroller));
     el.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -466,6 +494,9 @@ function playTimed(day, pid, card) {
       if (next) next.focus(); else el.blur();
     });
   });
+  const onResize = () => { const a = document.activeElement; if (a?.closest?.('.answers')) keepInView(a.closest('.ans'), scroller); };
+  vv?.addEventListener('resize', onResize);
+  firstEmpty.focus();
 
   let finished = false;
   const tEl = $('.clock .t', app);
@@ -474,12 +505,14 @@ function playTimed(day, pid, card) {
     finished = true;
     clearInterval(iv);
     inputs.forEach((el) => { el.disabled = true; });
+    document.activeElement?.blur?.();
     tEl.textContent = '0:00';
     $('.play', app)?.classList.add('over');
     const fields = { answers: answers.slice() };
     if (why === 'early') fields.doneAt = Date.now();
     saver.queue(fields, 0);
     $('.play-foot', app).innerHTML = `<p class="over-msg">${why === 'early' ? 'Locked in!' : 'Time’s up! Answers locked.'}</p><a class="btn primary big" href="#/">Done</a>`;
+    scroller.scrollTop = scroller.scrollHeight;
     await saver.flush();
   };
   const tick = () => {
@@ -491,79 +524,107 @@ function playTimed(day, pid, card) {
   const iv = setInterval(tick, 250);
   tick();
   playActions.doneEarly = () => finish('early');
-  playCleanup = () => { clearInterval(iv); saver.flush(); playActions.doneEarly = null; };
+  playCleanup = () => { clearInterval(iv); vv?.removeEventListener('resize', onResize); saver.flush(); playActions.doneEarly = null; };
 }
 
 const playActions = { doneEarly: null };
 
 function playAssisted(day, pid, name, card) {
   const today = S.today;
+  const n = day.prompts.length;
   const answers = (card.answers ?? []).slice();
-  while (answers.length < day.prompts.length) answers.push('');
+  while (answers.length < n) answers.push('');
   const bk = store.get(`ds.bk.${today}.${pid}`);
   if (bk?.answers && bk.at > (card.updatedAt ?? 0)) bk.answers.forEach((a, i) => { answers[i] = a; });
   const saver = makeSaver(today, pid, saveBadge);
   let step = answers.findIndex((a) => !String(a).trim());
-  if (step < 0) step = day.prompts.length; // all answered: show the review list
+  if (step < 0) step = n; // all answered: show the review list
+  let view = null; // 'ask' or 'review'
   let iv;
 
-  const draw = () => {
-    const n = day.prompts.length;
-    const dots = day.prompts.map((_, i) =>
-      `<button class="dot ${i === step ? 'on' : ''} ${String(answers[i]).trim() ? 'filled' : ''}" data-step="${i}" aria-label="Category ${i + 1}"></button>`).join('');
-    const head = `
-      <div class="ast-top">
-        <a href="#/" class="back" aria-label="Back">‹ Save &amp; close</a>
-        <span class="save" aria-live="polite"></span>
-      </div>
-      <p class="ast-who">${esc(name)}’s card · ${esc(lockPhrase(today).toLowerCase())}</p>`;
-    if (step >= n) {
-      app.innerHTML = `<div class="assist">${head}
-        <div class="letter-tile lg center">${esc(day.letter)}</div>
-        <ol class="review">${day.prompts.map((p, i) => `
-          <li><button class="rev" data-step="${i}"><span class="p">${esc(p)}</span>
-          <span class="a ${answers[i] ? '' : 'blank'}">${answers[i] ? esc(answers[i]) : 'tap to answer'}</span></button></li>`).join('')}</ol>
-        <a class="btn primary big" href="#/">All done ✓</a>
-        <p class="fine">${PLAYTEST ? 'You can change these until someone taps Reveal now.' : `You can change these until ${esc(T.clockLabel(G.lockAt(today)))} ET.`}</p>
-      </div>`;
-    } else {
-      app.innerHTML = `<div class="assist">${head}
-        <div class="dots">${dots}</div>
-        <div class="ask">
+  const top = `
+    <div class="ast-top">
+      <a href="#/" class="back" aria-label="Back">‹ Save &amp; close</a>
+      <span class="save" aria-live="polite"></span>
+    </div>
+    <p class="ast-who">${esc(name)}’s card · ${esc(lockPhrase(today).toLowerCase())}</p>`;
+
+  // The question screen is drawn once and updated in place, so the keyboard
+  // stays open while moving between categories.
+  const drawAsk = () => {
+    app.innerHTML = `<div class="assist screen">${top}
+      <div class="dots">${day.prompts.map((_, i) => `<button class="dot" data-step="${i}" aria-label="Category ${i + 1}"></button>`).join('')}</div>
+      <div class="ask">
+        <div class="letter-tile ask-tile">${esc(day.letter)}</div>
+        <div class="ask-text">
           <p class="ask-line">${esc(name)}, what’s…</p>
-          <p class="ask-prompt">${esc(day.prompts[step])}</p>
-          <p class="ask-line">starting with</p>
-          <div class="letter-tile xl center">${esc(day.letter)}</div>
+          <p class="ask-prompt"></p>
+          <p class="ask-line">starting with <strong>${esc(day.letter)}</strong></p>
         </div>
-        <input class="ask-input" value="${esc(answers[step])}" maxlength="60" autocapitalize="words" enterkeyhint="next" placeholder="Type ${esc(name)}’s answer" aria-label="Answer">
-        <div class="row nav">
-          <button class="btn big" data-step="${step - 1}" ${step === 0 ? 'disabled' : ''}>‹ Back</button>
-          <button class="btn primary big" data-step="${step + 1}">${step === n - 1 ? 'Review' : String(answers[step]).trim() ? 'Next ›' : 'Skip ›'}</button>
-        </div>
-      </div>`;
-      const input = $('.ask-input', app);
-      input.addEventListener('input', () => {
-        answers[step] = input.value;
-        saver.queue({ answers: answers.slice() });
-        const nextBtn = $('.nav .primary', app);
-        if (step < n - 1) nextBtn.textContent = input.value.trim() ? 'Next ›' : 'Skip ›';
-      });
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); move(step + 1); } });
-      input.focus();
-    }
+      </div>
+      <input class="ask-input" name="kenny-answer" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="next" placeholder="Type ${esc(name)}’s answer" aria-label="Answer">
+      <div class="row nav">
+        <button class="btn big" data-nav="-1">‹ Back</button>
+        <button class="btn primary big" data-nav="1"></button>
+      </div>
+    </div>`;
+    view = 'ask';
+    const input = $('.ask-input', app);
+    input.addEventListener('input', () => {
+      answers[step] = input.value;
+      saver.queue({ answers: answers.slice() });
+      updateAsk(false);
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); move(step + 1); } });
   };
+
+  const updateAsk = (full = true) => {
+    const input = $('.ask-input', app);
+    app.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('on', i === step);
+      d.classList.toggle('filled', !!String(answers[i]).trim());
+    });
+    const filled = !!String(answers[step]).trim();
+    $('[data-nav="1"]', app).textContent = step === n - 1 ? 'Review ›' : filled ? 'Next ›' : 'Skip ›';
+    if (!full) return;
+    $('.ask-prompt', app).textContent = day.prompts[step];
+    $('[data-nav="-1"]', app).disabled = step === 0;
+    input.value = answers[step];
+    input.focus();
+  };
+
+  const drawReview = () => {
+    view = 'review';
+    document.activeElement?.blur?.();
+    app.innerHTML = `<div class="assist screen review-screen">${top}
+      <div class="review-head"><div class="letter-tile md">${esc(day.letter)}</div><p>${esc(name)}’s answers. Tap one to change it.</p></div>
+      <ol class="review">${day.prompts.map((p, i) => `
+        <li><button class="rev" data-step="${i}"><span class="p">${esc(p)}</span>
+        <span class="a ${answers[i] ? '' : 'blank'}">${answers[i] ? esc(answers[i]) : 'tap to answer'}</span></button></li>`).join('')}</ol>
+      <a class="btn primary big" href="#/">All done ✓</a>
+      <p class="fine">${PLAYTEST ? 'You can change these until someone taps Reveal now.' : `You can change these until ${esc(T.clockLabel(G.lockAt(today)))} ET.`}</p>
+    </div>`;
+  };
+
   const move = (to) => {
     if (G.isRevealed(today)) { toast('Cards are locked for today.'); go('#/'); return; }
-    step = Math.max(0, Math.min(day.prompts.length, to));
-    draw();
+    step = Math.max(0, Math.min(n, to));
+    if (step >= n) { drawReview(); return; }
+    if (view !== 'ask') drawAsk();
+    updateAsk();
   };
+
   app.onclick = (e) => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav && !nav.disabled) { move(step + Number(nav.dataset.nav)); return; }
     const b = e.target.closest('[data-step]');
     if (b && !b.disabled) move(+b.dataset.step);
   };
-  draw();
+  // Tapping Back/Next shouldn't steal focus from the input (keeps the keyboard up).
+  app.onpointerdown = (e) => { if (view === 'ask' && e.target.closest('[data-nav], .dot')) e.preventDefault(); };
+  move(step);
   iv = setInterval(() => { if (G.isRevealed(today)) { saver.flush(); toast('Cards are locked for today.'); go('#/'); } }, 15000);
-  playCleanup = () => { clearInterval(iv); app.onclick = null; saver.flush(); };
+  playCleanup = () => { clearInterval(iv); app.onclick = null; app.onpointerdown = null; saver.flush(); };
 }
 
 // --- Day results ----------------------------------------------------------
@@ -677,9 +738,14 @@ function openAnswerSheet(dayId, pid, idx) {
       ${merges ? `<ul class="merges">${merges}</ul>` : ''}
       ${canAct && a.text && !isMine ? `<button class="btn big ${flaggedByMe ? '' : 'warn'}" data-act="flag" data-on="${flaggedByMe ? '0' : '1'}">${flaggedByMe ? 'Remove my flag' : '🚩 Not legit? Flag it'}</button>` : ''}
       ${canAct && a.text && others ? `<details class="same"><summary>≈ Same as another answer?</summary><p class="fine">Tap the answer that means the same thing. ${S.admin ? '' : 'The admin will confirm.'}</p><div class="chips">${others}</div></details>` : ''}
-      ${S.admin && a.text ? `<div class="admin-box"><p class="label">Admin: set points</p><div class="chips">
-        ${[0, 1, 2, 3, 4, 5].map((n) => `<button class="chip ${a.override === n ? 'on' : ''}" data-act="override" data-pts="${n}">${n}</button>`).join('')}
-        ${a.override !== null ? '<button class="chip" data-act="override" data-pts="reset">Reset</button>' : ''}</div>
+      ${S.admin && a.text ? `<div class="admin-box">
+        <p class="label">Admin: adjust points</p>
+        <div class="stepper">
+          <button class="btn step" data-act="override" data-pts="${Math.max(0, a.points - 1)}" ${a.points <= 0 ? 'disabled' : ''} aria-label="One point less">−</button>
+          <span class="step-val">${a.points}</span>
+          <button class="btn step" data-act="override" data-pts="${Math.min(20, a.points + 1)}" ${a.points >= 20 ? 'disabled' : ''} aria-label="One point more">+</button>
+        </div>
+        <p class="fine">Automatic score: ${a.base}${a.dupe ? ' (struck as a match)' : !a.valid ? ` (doesn’t start with ${esc(day.letter)})` : ''}.${a.override !== null ? ' <button class="link" data-act="override" data-pts="reset">Reset to automatic</button>' : ''}</p>
         ${a.flags.length ? '<button class="btn" data-act="clear-flags">Clear flags</button>' : ''}</div>` : ''}
       <button class="btn ghost big" data-act="close">Close</button>
     </div>`;
