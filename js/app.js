@@ -1,8 +1,8 @@
-import * as T from './time.js';
-import * as G from './game.js';
-import { scoreDay, scoreWeek, hasPlayed, isValid } from './scoring.js';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js';
-import { PLAYTEST, exitPlaytest } from './mode.js';
+import * as T from './time.js?v=202611051917';
+import * as G from './game.js?v=202611051917';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611051917';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611051917';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611051917';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -484,6 +484,7 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
             <label class="ans">
               <span class="p"><span class="n">${i + 1}</span>${esc(p)}</span>
               <input data-i="${i}" name="a${i}" value="${esc(answers[i])}" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="${i < n - 1 ? 'next' : 'done'}" placeholder="${assisted ? `${esc(name)}’s answer` : `${L}…`}">
+              <span class="rep-msg" aria-live="polite"></span>
             </label>`).join('')}
         </form>
         <div class="play-foot">${foot}</div>
@@ -495,8 +496,37 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   const scroller = $('.scroller', app);
   const inputs = [...app.querySelectorAll('.answers input')];
 
+  // No using the same answer twice on one card: warn while typing, clear it on leaving the box.
+  const repeatOf = (i) => {
+    const norm = normalize(answers[i]);
+    if (!norm) return -1;
+    return answers.findIndex((a, j) => j !== i && normalize(a) === norm);
+  };
+  const showRepeat = (el) => {
+    const i = +el.dataset.i;
+    const j = repeatOf(i);
+    const row = el.closest('.ans');
+    row.classList.toggle('repeat', j >= 0);
+    row.querySelector('.rep-msg').textContent = j >= 0 ? `Already used for #${j + 1}. Try something else.` : '';
+  };
+  const clearRepeat = (el) => {
+    const i = +el.dataset.i;
+    const j = repeatOf(i);
+    if (j < 0 || el.disabled) return;
+    toast(`“${el.value.trim()}” is already your answer for #${j + 1}.`);
+    el.value = '';
+    answers[i] = '';
+    saver.queue({ answers: answers.slice() });
+    showRepeat(el);
+  };
+
   inputs.forEach((el) => {
-    el.addEventListener('input', () => { answers[+el.dataset.i] = el.value; saver.queue({ answers: answers.slice() }); });
+    el.addEventListener('input', () => {
+      answers[+el.dataset.i] = el.value;
+      saver.queue({ answers: answers.slice() });
+      inputs.forEach(showRepeat);
+    });
+    el.addEventListener('blur', () => clearRepeat(el));
     el.addEventListener('focus', () => keepInView(el.closest('.ans'), scroller));
     el.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
@@ -515,6 +545,11 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     if (finished) return;
     finished = true;
     clearInterval(iv);
+    // Drop any repeat that's still there (keep the first one).
+    answers.forEach((a, i) => {
+      const norm = normalize(a);
+      if (norm && answers.slice(0, i).some((b) => normalize(b) === norm)) { answers[i] = ''; inputs[i].value = ''; }
+    });
     inputs.forEach((el) => { el.disabled = true; });
     document.activeElement?.blur?.();
     $('.play', app)?.classList.add('over');
@@ -582,7 +617,7 @@ async function viewDay(id, { embedded = false } = {}) {
   const sections = day.prompts.map((prompt, i) => {
     const rows = playing.map((pid) => {
       const a = players[pid].answers[i];
-      const cls = [a.dupe ? 'dupe' : '', a.text && !a.valid ? 'invalid' : '', !a.text ? 'blank' : '', a.override !== null ? 'overridden' : '', a.flags.length ? 'flagged' : ''].join(' ');
+      const cls = [a.dupe || a.repeatOf !== null ? 'dupe' : '', a.text && !a.valid ? 'invalid' : '', !a.text ? 'blank' : '', a.override !== null ? 'overridden' : '', a.flags.length ? 'flagged' : ''].join(' ');
       const pending = a.merges.some((m) => !m.confirmed);
       const marks = `${a.flags.length ? `<span class="mk flag">🚩${a.flags.length}</span>` : ''}${pending ? '<span class="mk">≈?</span>' : ''}${a.override !== null ? '<span class="mk adm">set</span>' : ''}`;
       return `<button class="ansrow ${cls}" data-act="answer" data-day="${id}" data-pid="${pid}" data-i="${i}">
@@ -642,6 +677,7 @@ function openAnswerSheet(dayId, pid, idx) {
   const info = [];
   if (!a.text) info.push('No answer.');
   else if (!a.valid) info.push(`Doesn’t start with ${esc(day.letter)}, so no points.`);
+  if (a.repeatOf !== null) info.push(`Struck: ${esc(players[pid].name)} already used this for #${a.repeatOf + 1}.`);
   if (a.dupe) info.push(`Struck: same as ${a.dupeWith.map((x) => esc(nameOf(x))).join(', ')}.`);
   if (a.flags.length) info.push(`🚩 Flagged by ${a.flags.map((x) => esc(nameOf(x))).join(', ')}.`);
   if (a.override !== null) info.push(`Admin set this to ${a.override} point${a.override === 1 ? '' : 's'} (normally ${a.base}).`);

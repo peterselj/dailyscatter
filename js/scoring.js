@@ -10,6 +10,8 @@
 //  - A valid, unique answer scores 1 point per word that starts with the
 //    letter, skipping filler words like "of" and "and" (always at least 1).
 //    "Mickey Mantle" for M = 2.
+//  - Using the same answer twice on your own card only counts the first one;
+//    the repeat scores 0 (the app also stops you from entering it).
 //  - An admin override sets the points for one answer outright and wins over
 //    everything above.
 
@@ -98,6 +100,7 @@ export function scoreDay(day) {
         valid: isValid(text, letter),
         dupe: false,
         dupeWith: [],
+        repeatOf: null, // index of this player's earlier identical answer
         base: 0,
         override: null,
         points: 0,
@@ -105,6 +108,11 @@ export function scoreDay(day) {
         merges: [],
       });
     }
+    answers.forEach((a, i) => {
+      if (!a.norm) return;
+      const first = answers.findIndex((b) => b.norm === a.norm);
+      if (first < i) a.repeatOf = first;
+    });
     players[id] = { name: card.name || id, skipped: !!card.skipped, played, total: 0, answers };
   }
 
@@ -146,7 +154,7 @@ export function scoreDay(day) {
   for (const id of ids) {
     const p = players[id];
     p.answers.forEach((a, i) => {
-      a.base = p.played && !a.dupe ? basePoints(a.text, letter) : 0;
+      a.base = p.played && !a.dupe && a.repeatOf === null ? basePoints(a.text, letter) : 0;
       const o = p.played ? overrides[overrideKey(id, i)] : undefined;
       a.override = o && Number.isFinite(o.points) ? o.points : null;
       a.points = a.override ?? a.base;

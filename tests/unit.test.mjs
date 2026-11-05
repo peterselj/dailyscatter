@@ -135,6 +135,30 @@ test('week totals add up revealed days; skips are marked; ties share the crown',
   assert.deepEqual(scoreWeek([]).winners, []);
 });
 
+test('repeating your own answer only counts the first one', () => {
+  const d = day({ josh: card('Josh', ['Gouda', 'The gouda!', 'Goat', '', 'goat']) });
+  const { players } = scoreDay(d);
+  assert.equal(players.josh.answers[0].points, 1);
+  assert.equal(players.josh.answers[1].repeatOf, 0);
+  assert.equal(players.josh.answers[1].points, 0);
+  assert.equal(players.josh.answers[4].repeatOf, 2);
+  assert.equal(players.josh.total, 2);
+  assert.equal(players.josh.answers[3].repeatOf, null); // blanks are not repeats
+});
+
+test('every file reference carries the same version stamp', async () => {
+  const fs = await import('node:fs');
+  const files = [...fs.readdirSync('js').map((f) => `js/${f}`), 'index.html', 'kenny.html'];
+  const stamps = new Set();
+  for (const f of files) {
+    const src = fs.readFileSync(f, 'utf8');
+    const unstamped = src.match(/from\s+'\.\/[\w-]+\.js'|(?:href|src)="(?:css\/[\w-]+\.css|js\/[\w-]+\.js|[\w-]+\.webmanifest)"/g);
+    assert.equal(unstamped, null, `${f} has an unstamped reference; run npm run stamp`);
+    for (const m of src.matchAll(/\?v=([\w-]+)/g)) stamps.add(m[1]);
+  }
+  assert.equal(stamps.size, 1, `mixed versions: ${[...stamps].join(', ')}; run npm run stamp`);
+});
+
 // --- Time ------------------------------------------------------------------
 
 test('day ids follow Eastern time, not UTC', () => {
