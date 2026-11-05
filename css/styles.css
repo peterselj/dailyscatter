@@ -336,3 +336,15 @@ input:disabled { opacity: .7; }
   width: max-content; max-width: calc(100vw - 32px); text-align: center;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* --- Playtest banner ---------------------------------------------------- */
+.pt-bar {
+  margin: 0 16px 8px; padding: 10px 12px; border-radius: 14px;
+  background: repeating-linear-gradient(-45deg, var(--gold), var(--gold) 12px, #f7c25c 12px, #f7c25c 24px);
+  color: var(--gold-ink); font-size: 15px;
+}
+.pt-bar p { margin: 0 0 8px; }
+.pt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.sm { min-height: 38px; padding: 6px 14px; font-size: 15px; border-radius: 12px; }
+.pt-bar .btn:not(.primary) { background: rgba(255, 255, 255, .7); border-color: transparent; color: var(--gold-ink); }
+.pt-bar .btn.ghost { background: transparent; text-decoration: underline; }
