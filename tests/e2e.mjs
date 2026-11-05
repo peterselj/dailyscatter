@@ -142,6 +142,9 @@ try {
   for (let i = 0; i < 5; i++) await zi[i].fill(Z[i]);
   await saved(zach.page);
   await zach.page.click('[data-act=done-early]');
+  assert.match(await zach.page.innerText('[data-act=done-early]'), /Tap again/);
+  assert.equal(await zach.page.$('.play.over'), null, 'one tap does not end the card');
+  await zach.page.click('[data-act=done-early]');
   await zach.page.waitForSelector('.play.over');
   assert.match(await text(zach.page), /Locked in!/);
   log('Zach got the same letter and locked in early');
@@ -163,38 +166,43 @@ try {
   log('Mom played her card; Kenny’s card is offered below');
 
   await mom.page.click('.card.helper a.btn');
-  await runUntil(mom.page, '.assist .ask');
+  await runUntil(mom.page, '.play.assisted .answers');
   await mom.page.clock.runFor(1000); // let the letter reveal fade out
-  await shot(mom.page, '07-kenny-prompt');
-  const kk = await withKeyboard(mom.page, '07b-kenny-keyboard', '.ask-input', () => {
-    const r = (sel) => document.querySelector(sel).getBoundingClientRect();
-    return { prompt: r('.ask-prompt').top >= 0, letter: r('.ask-tile').top >= 0, input: r('.ask-input').bottom <= 290, next: r('.nav .primary').bottom <= 290 };
+  assert.match(await mom.page.innerText('.play-top'), /Kenny mode/);
+  assert.equal(await mom.page.$('.clock .t'), null, 'no countdown in Kenny mode');
+  await shot(mom.page, '07-kenny-card');
+  const kk = await withKeyboard(mom.page, '07b-kenny-keyboard', '.answers input[data-i="2"]', () => {
+    const head = document.querySelector('.play-top').getBoundingClientRect();
+    const row = document.activeElement.closest('.ans').getBoundingClientRect();
+    const input = document.activeElement.getBoundingClientRect();
+    return { head: head.top >= 0, row: row.top >= head.bottom - 1, input: input.bottom <= 290 };
   });
-  assert.deepEqual(kk, { prompt: true, letter: true, input: true, next: true }, 'Kenny screen fits above the keyboard');
-  log('Kenny mode with the keyboard up: question, letter, answer box and Next all fit');
-  assert.match(await mom.page.innerText('.ask'), /Kenny, what’s/);
-  await mom.page.fill('.ask-input', `${L}alpha`); // same as Josh: both get struck
-  await mom.page.click('.nav .primary');
-  await mom.page.fill('.ask-input', `${L}ten`);
+  assert.deepEqual(kk, { head: true, row: true, input: true }, 'Kenny card fits above the keyboard');
+  log('Kenny mode uses the regular layout with a "Kenny mode" tag; it fits above the keyboard');
+  // Type with real key presses (like a phone keyboard), Enter moves to the next box.
+  await mom.page.click('.answers input[data-i="0"]');
+  await mom.page.keyboard.type(`${L}alpha`); // same as Josh: both get struck
+  await mom.page.keyboard.press('Enter');
+  assert.equal(await mom.page.evaluate(() => document.activeElement.dataset.i), '1', 'Enter moves to the next category');
+  await mom.page.keyboard.type(`${L}ten`);
   await saved(mom.page);
-  await mom.page.click('text=Save & close');
+  await mom.page.click('[data-act=assist-done]');
   await mom.page.waitForSelector('.card.helper');
   assert.match(await mom.page.innerText('.card.helper'), /2 of 5 answered/);
-  log('Kenny answered 2, Mom saved and closed (he fell asleep)');
+  log('Kenny answered 2, Mom tapped "Done for now" (he fell asleep)');
 
   await mom.page.clock.runFor(60 * 60_000); // an hour later
   await mom.page.click('.card.helper a.btn');
-  await runUntil(mom.page, '.assist .ask');
-  assert.match(await mom.page.innerText('.ask-prompt'), /.+/);
-  await mom.page.fill('.ask-input', `${L}eleven ${L}twelve`);
-  await mom.page.click('.nav .primary');
-  await mom.page.click('.nav .primary'); // skip #4
-  await mom.page.fill('.ask-input', `${L}thirteen`);
-  await mom.page.click('.nav .primary');
-  await mom.page.waitForSelector('.review');
+  await runUntil(mom.page, '.play.assisted .answers');
+  assert.equal(await mom.page.inputValue('.answers input[data-i="1"]'), `${L}ten`, 'earlier answers are still there');
+  assert.equal(await mom.page.evaluate(() => document.activeElement.dataset.i), '2', 'opens on the first empty category');
+  await mom.page.keyboard.type(`${L}eleven ${L}twelve`);
+  await mom.page.keyboard.press('Enter');
+  await mom.page.keyboard.press('Enter'); // skip #4
+  await mom.page.keyboard.type(`${L}thirteen`);
   await saved(mom.page);
-  await shot(mom.page, '08-kenny-review');
-  await mom.page.click('text=All done');
+  await shot(mom.page, '08-kenny-filled');
+  await mom.page.click('[data-act=assist-done]');
   await mom.page.waitForSelector('.card.helper');
   log('Later, Mom finished Kenny’s card (no timer)');
 
@@ -356,6 +364,7 @@ try {
   await p1.page.fill('.answers input[data-i="1"]', `${PL}same`);
   await saved(p1.page);
   await p1.page.click('[data-act=done-early]');
+  await p1.page.click('[data-act=done-early]');
   await p1.page.waitForSelector('.play.over');
   await p1.page.click('text=Done');
 
@@ -365,6 +374,7 @@ try {
   await runUntil(p2.page, '.play .answers');
   await p2.page.fill('.answers input[data-i="1"]', `${PL}same`);
   await saved(p2.page);
+  await p2.page.click('[data-act=done-early]');
   await p2.page.click('[data-act=done-early]');
   await p2.page.waitForSelector('.play.over');
   log('Two players played a practice card after 1pm');
