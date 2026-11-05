@@ -1,0 +1,11 @@
+{
+  "name": "dailyscatter",
+  "private": true,
+  "type": "module",
+  "description": "A daily family category game. Static site; no build step and no dependencies.",
+  "scripts": {
+    "test": "node --test tests/unit.test.mjs",
+    "e2e": "node tests/e2e.mjs",
+    "serve": "node tests/server.mjs"
+  }
+}

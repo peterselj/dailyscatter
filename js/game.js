@@ -1,0 +1,151 @@
+// Game actions: everything that reads or writes the database.
+import * as db from './db.js';
+import * as T from './time.js';
+import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js';
+import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js';
+import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js';
+
+// Cache of day documents: id -> data, or null if nobody has rolled that day.
+export const days = {};
+
+const dayPath = (id) => `days/${id}`;
+
+export async function loadDay(id) {
+  days[id] = await db.getDoc(dayPath(id));
+  return days[id];
+}
+
+// Loads a week's days up to `upTo`. With `onlyFresh`, days already cached are
+// reused and only the listed ids are re-fetched (saves reads when polling).
+export async function loadWeek(wid, upTo, { onlyFresh } = {}) {
+  const ids = T.weekDays(wid).filter((id) => id <= upTo);
+  const need = onlyFresh ? ids.filter((id) => !(id in days) || onlyFresh.includes(id)) : ids;
+  await Promise.all(need.map(loadDay));
+  return ids;
+}
+
+export async function loadAllDays() {
+  const list = await db.listDocs('days');
+  for (const { id, data } of list) days[id] = data;
+  return list.map((d) => d.id).sort();
+}
+
+export async function listPlayers() {
+  return (await db.listDocs('players')).map(({ id, data }) => ({ id, name: data.name || id }));
+}
+
+export async function savePlayer(id, name) {
+  await db.setDoc(`players/${id}`, { name, lastSeen: Date.now() }, { mask: ['name', 'lastSeen'] });
+}
+
+// "Josh" -> "josh"; "Mary Ann" -> "maryann". Null if nothing usable.
+export function playerId(name) {
+  const id = String(name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!id) return null;
+  return /^[a-z]/.test(id) ? id.slice(0, 24) : `p${id}`.slice(0, 24);
+}
+
+export const assistedById = (id) => ASSISTED_PLAYERS.find((p) => p.id === id) ?? null;
+
+// First person of the day rolls the letter. If two people roll at the same
+// moment, the database accepts only the first; everyone gets that letter.
+export async function rollDay(today, rollerName) {
+  const wid = T.weekId(today);
+  await loadWeek(wid, today);
+  if (days[today]?.letter) return days[today];
+  const used = T.weekDays(wid).filter((d) => d !== today).map((d) => days[d]?.letter).filter(Boolean);
+  const special = SPECIAL_CARDS[today];
+  const data = {
+    letter: special?.letter ?? rollLetter(used),
+    prompts: promptsFor(today, wid, T.weekdayIndex(today)),
+    rolledBy: rollerName,
+    rolledAt: Date.now(),
+  };
+  if (special?.title) data.title = special.title;
+  try {
+    days[today] = await db.setDoc(dayPath(today), data, { exists: false });
+  } catch (e) {
+    if (e.status === 0) throw e;
+    const d = await loadDay(today); // someone beat us to it
+    if (!d?.letter) throw e;
+  }
+  return days[today];
+}
+
+export function deadline(card, dayId) {
+  const lock = T.lockTime(dayId);
+  if (!card?.startedAt) return lock;
+  if (card.assisted) return lock;
+  return Math.min(card.startedAt + TIMER_SECONDS * 1000, lock, card.doneAt ?? Infinity);
+}
+
+export function cardOpen(card, dayId, now = Date.now()) {
+  return !!card?.startedAt && !card.skipped && now < deadline(card, dayId);
+}
+
+// Starts (or resumes) a player's card. Returns the card.
+export async function startCard(today, pid, name, { assisted = false, delayMs = 0 } = {}) {
+  const day = await loadDay(today);
+  const existing = day?.cards?.[pid];
+  if (existing?.startedAt && !existing.skipped) return existing;
+  const now = Date.now();
+  const card = {
+    name,
+    startedAt: now + delayMs,
+    answers: existing?.answers?.length ? existing.answers : Array(PROMPTS_PER_CARD).fill(''),
+    updatedAt: now,
+    skipped: false,
+  };
+  if (assisted) card.assisted = true;
+  await writeDay(today, { cards: { [pid]: card } }, [`cards.${pid}`]);
+  return card;
+}
+
+export async function saveCardFields(dayId, pid, fields) {
+  const f = { ...fields, updatedAt: Date.now() };
+  await writeDay(dayId, { cards: { [pid]: f } }, Object.keys(f).map((k) => `cards.${pid}.${k}`));
+}
+
+export async function setSkipped(today, pid, name, skipped) {
+  const card = days[today]?.cards?.[pid];
+  if (card) return saveCardFields(today, pid, { skipped });
+  return writeDay(today, {
+    cards: { [pid]: { name, assisted: true, skipped, answers: Array(PROMPTS_PER_CARD).fill(''), updatedAt: Date.now() } },
+  }, [`cards.${pid}`]);
+}
+
+// --- Review: flags, "same as" merges, admin overrides ----------------------
+
+export async function setFlag(dayId, target, idx, by, on) {
+  const k = flagKey(target, idx, by);
+  await writeDay(dayId, on ? { flags: { [k]: { target, idx, by, at: Date.now() } } } : {}, [`flags.${k}`]);
+}
+
+export async function clearFlags(dayId, target, idx) {
+  const keys = Object.keys(days[dayId]?.flags ?? {}).filter((k) => k.startsWith(`${target}__${idx}__`));
+  if (keys.length) await writeDay(dayId, {}, keys.map((k) => `flags.${k}`));
+}
+
+export async function suggestMerge(dayId, idx, a, b, by, confirmed) {
+  const k = mergeKey(idx, a, b);
+  const [x, y] = [a, b].sort();
+  await writeDay(dayId, { merges: { [k]: { idx, a: x, b: y, by, confirmed, at: Date.now() } } }, [`merges.${k}`]);
+}
+
+export async function confirmMerge(dayId, key) {
+  await writeDay(dayId, { merges: { [key]: { confirmed: true } } }, [`merges.${key}.confirmed`]);
+}
+
+export async function removeMerge(dayId, key) {
+  await writeDay(dayId, {}, [`merges.${key}`]);
+}
+
+export async function setOverride(dayId, target, idx, points, by) {
+  const k = overrideKey(target, idx);
+  await writeDay(dayId, points === null ? {} : { overrides: { [k]: { target, idx, points, by, at: Date.now() } } }, [`overrides.${k}`]);
+}
+
+async function writeDay(dayId, data, mask) {
+  days[dayId] = await db.setDoc(dayPath(dayId), data, { mask, exists: true });
+  return days[dayId];
+}
