@@ -5,7 +5,8 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 ## How it plays
 
 - **Every day:** the first person to open the app rolls the letter for everyone. Each card has 5 categories and one letter. The categories and letter stay hidden until you hit **Start**, and then you get **3 minutes**. Answers save as you type and lock when time's up, or when you tap "I'm done."
-- **At 1:00pm Eastern:** cards lock and everyone's answers are revealed.
+- **All day:** the card is open until midnight Eastern. Before you've played, Today shows the start button first, with one line under it for yesterday's score. After you've played, it shows the week's standings so far.
+- **At midnight:** the day closes and everyone's answers are revealed.
   - An answer that **matches** someone else's on the same category is struck out for everyone who wrote it. Matching ignores capitals, punctuation, accents and a leading "the/a/an."
   - An answer that **doesn't start with the letter** scores 0.
   - You can't use the **same answer twice** on your own card. The box turns red, the repeat is cleared when you leave it, and a repeat would score 0 anyway.
@@ -18,7 +19,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 
 Players listed in `ASSISTED_PLAYERS` (in `js/config.js`) play with a helper's phone:
 - Same screen as a regular card, but with no timer: a green **Kenny mode** tag sits where the clock would be. The helper asks each category out loud and types the answer.
-- Answers save as you go, so you can close it and come back later. It has to be done by 1pm.
+- Answers save as you go, so you can close it and come back later. It has to be done by midnight.
 - **Not today 😴** marks a day off. Tap **Actually, let's play** to undo it.
 - Kenny has his own page, `kenny.html`, which you can add to the Home Screen as a second icon.
 
@@ -30,7 +31,7 @@ Open the site in Safari, tap **Share**, then **Add to Home Screen**. For Kenny, 
 
 Open **https://peterselj.github.io/dailyscatter/?playtest** to practice any time of day:
 - **Separate data:** playtest uses its own practice data. Nothing there touches the real game or the real scores.
-- **No 1pm wait:** tap **Reveal now** in the yellow banner to see results right away.
+- **No midnight wait:** tap **Reveal now** in the yellow banner to see results right away.
 - **Next day ›** jumps the practice game forward a day, so you can play through a whole week and watch the Monday reset.
 - **Exit** returns to the real game. **⚙︎ → Wipe all playtest data** starts the practice over.
 
@@ -52,7 +53,7 @@ Playtest stays on for that phone until you tap Exit. Everyone in playtest shares
 | The categories | `PROMPTS` in `js/prompts.js` |
 | A special card for a birthday or holiday | `SPECIAL_CARDS` in `js/prompts.js` (there's an example in the comments) |
 | Which letters can come up | `LETTERS` in `js/prompts.js` |
-| Lock/reveal time | `LOCK_HOUR` in `js/time.js` |
+| When a day closes and is revealed | `lockTime` in `js/time.js` (midnight Eastern) |
 
 Players switch who they are under ⚙︎ → **Switch player**. The admin unlocks admin mode under ⚙︎ with the admin code.
 
@@ -65,7 +66,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/app.js` | Screens, routing, the timer and Kenny mode |
 | `js/game.js` | Reading and writing game data |
 | `js/scoring.js` | All scoring rules (pure functions, unit tested) |
-| `js/time.js` | Eastern-time days, the 1pm lock and Monday weeks, with DST handled |
+| `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
 | `js/prompts.js` | Categories, letters and the daily pick (no repeats within a week) |
 | `js/db.js`, `js/codec.js` | Tiny Firestore REST client |
 

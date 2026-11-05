@@ -1,8 +1,8 @@
-import * as T from './time.js?v=202611051932';
-import * as G from './game.js?v=202611051932';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611051932';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611051932';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611051932';
+import * as T from './time.js?v=202611052217';
+import * as G from './game.js?v=202611052217';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611052217';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611052217';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611052217';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -240,27 +240,57 @@ async function viewToday() {
   const lock = G.lockAt(today);
   const locked = now >= lock;
 
+  // Yesterday's results (revealed at midnight), and last week's winner on a fresh Monday.
+  const yid = T.addDays(today, -1);
+  const wid = T.weekId(today);
+  const extra = [];
+  extra.push(G.loadDay(yid)); // re-fetched: flags and admin fixes can change it
+  if (!currentWeekScores(wid).rows.length) extra.push(G.loadWeek(T.addDays(wid, -7), T.addDays(wid, -1), { onlyFresh: [] }));
+  await Promise.all(extra);
+
   let html = `<h2 class="date">${esc(T.dayLabel(today, true))}</h2>`;
   if (day?.title) html += `<p class="special">✨ ${esc(day.title)}</p>`;
 
-  if (locked) {
-    html += day ? await viewDay(today, { embedded: true }) : `<div class="card empty"><p>Nobody played today. Cards open again tomorrow at midnight.</p></div>`;
-    return html + weekTeaser();
+  if (locked) { // only happens in playtest, after "Reveal now"
+    html += day ? await viewDay(today, { embedded: true }) : '<div class="card empty"><p>Nobody played today. A new card opens at midnight.</p></div>';
+    return html + weekStandings(true);
   }
 
+  // Before you've played: today's card comes first, with nothing to scroll past.
+  // After: a short "locked in" card, then the week's standings.
   const mainId = AS ? AS : S.me.id;
   const mainName = AS ? helped.name : S.me.name;
+  const mine = day?.cards?.[mainId];
+  const done = AS
+    ? !!mine?.skipped || (mine?.answers ?? []).filter((a) => String(a).trim()).length === 5
+    : !!mine?.startedAt && !G.cardOpen(mine, today, now);
+  const helpers = AS ? [] : ASSISTED_PLAYERS.map((p) => {
+    const c = day?.cards?.[p.id];
+    const finished = !!c?.skipped || (c?.answers ?? []).filter((a) => String(a).trim()).length === 5;
+    return { html: assistedCard(day, p.id, p.name, now, lock, false), finished };
+  });
+
   html += AS ? assistedCard(day, mainId, mainName, now, lock, true) : myCard(day, now, lock);
-  if (!AS) for (const p of ASSISTED_PLAYERS) html += assistedCard(day, p.id, p.name, now, lock, false);
+  if (!done) {
+    html += yesterdayLine(yid);
+    html += helpers.map((h) => h.html).join('');
+    html += whoPlayed(day, now);
+    html += `<p class="fine">${revealPhrase(today, now)}</p>`;
+    return html;
+  }
+  html += helpers.filter((h) => !h.finished).map((h) => h.html).join(''); // e.g. Mom's next job: Kenny's card
+  html += weekStandings(true);
+  html += yesterdayLine(yid);
+  html += helpers.filter((h) => h.finished).map((h) => h.html).join('');
   html += whoPlayed(day, now);
   html += `<p class="fine">${revealPhrase(today, now)}</p>`;
-  return html + weekTeaser();
+  return html;
 }
 
 function myCard(day, now, lock) {
   const card = day?.cards?.[S.me.id];
   const left = lock - now;
-  const short = left < TIMER_SECONDS * 1000 ? `<p class="warn">Heads up: only ${esc(T.timerLabel(left))} left before cards lock.</p>` : '';
+  const short = left < TIMER_SECONDS * 1000 ? `<p class="warn">Heads up: only ${esc(T.timerLabel(left))} left before today’s card closes at midnight.</p>` : '';
   if (!day) {
     return `<section class="card hero">
       <p class="eyebrow">You’re first today!</p>
@@ -286,10 +316,9 @@ function myCard(day, now, lock) {
       <button class="btn primary big" data-act="resume">Back to my card</button>
     </section>`;
   }
-  return `<section class="card">
-    <p class="eyebrow ok">✓ You’re locked in</p>
-    ${answerList(day, card)}
-    <p class="fine">${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : `Everyone’s answers appear at ${esc(T.clockLabel(lock))} ET.`}</p>
+  return `<section class="card locked-in">
+    <p class="eyebrow ok">✓ You’re locked in for today</p>
+    <details><summary>Your answers</summary>${answerList(day, card)}</details>
   </section>`;
 }
 
@@ -340,11 +369,39 @@ function whoPlayed(day, now) {
   return `<section class="card"><p class="label">Played so far</p><div class="chips">${chips}</div></section>`;
 }
 
-function weekTeaser() {
-  const { rows, winners } = currentWeekScores(T.weekId(S.today));
-  if (!rows.length) return '';
-  const lead = rows.filter((r) => winners.includes(r.id)).map((r) => esc(r.name)).join(' & ');
-  return `<a class="card teaser" href="#/week"><span>This week</span><strong>${lead ? `👑 ${lead} · ${rows[0].total}` : 'No points yet'}</strong><span class="chev">›</span></a>`;
+// One small line about yesterday, e.g. "Your score yesterday: 5 · 🏆 Zach won ›".
+function yesterdayLine(yid) {
+  const day = G.days[yid];
+  if (!day || !revealed(yid)) return '';
+  const { players, order } = scoreDay(day);
+  const playing = order.filter((p) => players[p].played);
+  if (!playing.length) return '';
+  const top = players[playing[0]].total;
+  const champs = playing.filter((p) => players[p].total === top).map((p) => esc(players[p].name)).join(' & ');
+  const who = AS || S.me?.id;
+  const mine = players[who]?.played ? players[who].total : null;
+  const lead = mine === null ? 'Yesterday' : `${AS ? `${esc(helped.name)}’s` : 'Your'} score yesterday: <strong>${mine}</strong>`;
+  return `<a class="yline" href="#/day/${yid}"><span>${lead} · 🏆 ${champs} won${mine === null ? ` with ${top}` : ''}</span><span class="chev">›</span></a>`;
+}
+
+function weekStandings(placeholder = false) {
+  const wid = T.weekId(S.today);
+  const { rows, winners } = currentWeekScores(wid);
+  if (!rows.length) {
+    const pw = T.addDays(wid, -7);
+    const last = scoreWeek(T.weekDays(pw).map((id) => ({ id, day: G.days[id] })));
+    if (!last.rows.length) {
+      return placeholder ? '<section class="card week-mini"><p class="label">This week so far</p><p class="fine">No scores yet. Today’s results show up at midnight.</p></section>' : '';
+    }
+    const champs = last.rows.filter((r) => last.winners.includes(r.id)).map((r) => esc(r.name)).join(' & ');
+    return `<a class="card teaser" href="#/week/${pw}"><span>New week!</span><strong>Last week: 🏆 ${champs} · ${last.rows[0].total}</strong><span class="chev">›</span></a>`;
+  }
+  const me = AS || S.me?.id;
+  const list = rows.map((r) => `<li class="${r.id === me ? 'me' : ''}"><span class="rank">${winners.includes(r.id) ? '👑' : ''}</span><span class="nm">${esc(r.name)}</span><span class="pts">${r.total}</span></li>`).join('');
+  return `<section class="card week-mini">
+    <div class="wm-head"><p class="label">This week so far</p><a href="#/week" class="wm-link">Full week ›</a></div>
+    <ol class="standings">${list}</ol>
+  </section>`;
 }
 
 function revealed(dayId, now = Date.now()) {
@@ -354,13 +411,13 @@ function revealed(dayId, now = Date.now()) {
 // "Locks in 2h 10m" (or the playtest equivalent).
 function lockPhrase(dayId, now = Date.now()) {
   if (PLAYTEST) return 'Open until someone taps Reveal now';
-  return `Locks in ${T.durationLabel(G.lockAt(dayId) - now)}`;
+  return 'Open until midnight';
 }
 
 function revealPhrase(dayId, now = Date.now()) {
   if (PLAYTEST) return 'Playtest: answers appear when someone taps <strong>Reveal now</strong> above.';
   const lock = G.lockAt(dayId);
-  return `Cards lock and answers are revealed at ${esc(T.clockLabel(lock))} ET · in ${esc(T.durationLabel(lock - now))}`;
+  return `Today’s card is open until midnight. Everyone’s answers are revealed then · in ${esc(T.durationLabel(lock - now))}`;
 }
 
 function currentWeekScores(wid) {
@@ -498,7 +555,7 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     : `<span class="t">${esc(T.timerLabel(G.deadline(card, today) - Date.now()))}</span>`;
   const foot = assisted
     ? `<button class="btn go big" data-act="assist-done">Done for now ✓</button>
-       <p class="fine">Answers save as you type. You can come back and change them ${PLAYTEST ? 'until someone taps Reveal now' : `until ${esc(T.clockLabel(G.lockAt(today)))} ET`}.</p>`
+       <p class="fine">Answers save as you type. You can come back and change them ${PLAYTEST ? 'until someone taps Reveal now' : 'until midnight'}.</p>`
     : '<button class="btn go big" data-act="done-early">I’m done</button>';
 
   app.innerHTML = `
@@ -640,7 +697,7 @@ async function viewDay(id, { embedded = false } = {}) {
   const top = embedded ? '' : `<a class="back" href="#/week/${T.weekId(id)}">‹ Week of ${esc(T.monthDay(T.weekId(id)))}</a><h2 class="date">${esc(T.dayLabel(id, true))}</h2>`;
   if (!day) return `${top}<div class="card empty"><p>Nobody played this day.</p></div>`;
   if (!revealed(id)) {
-    return `${top}<div class="card empty"><p>${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : `Answers are revealed at ${esc(T.clockLabel(G.lockAt(id)))} ET.`}</p></div>`;
+    return `${top}<div class="card empty"><p>${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : 'Everyone’s answers are revealed at midnight.'}</p></div>`;
   }
   const { players, order } = scoreDay(day);
   const playing = order.filter((pid) => players[pid].played);
@@ -827,7 +884,7 @@ async function viewWeek(arg) {
     <h2 class="date">${esc(title)}</h2>
     <p class="fine">${esc(T.monthDay(wid))} – ${esc(T.monthDay(T.addDays(wid, 6)))}. ${isCurrent ? 'Scores reset every Monday.' : ''}</p>
     ${banner}
-    ${rows.length ? `<section class="card flush"><table class="board"><thead><tr><th></th>${head}<th>Total</th></tr></thead><tbody>${body}</tbody></table></section>` : '<div class="card empty"><p>No results yet this week. Scores show up after 1pm ET.</p></div>'}
+    ${rows.length ? `<section class="card flush"><table class="board"><thead><tr><th></th>${head}<th>Total</th></tr></thead><tbody>${body}</tbody></table></section>` : '<div class="card empty"><p>No results yet this week. Each day’s scores show up at midnight.</p></div>'}
     <section class="card flush days">${dayList}</section>
     ${rows.length ? `<button class="btn big" data-act="share-week" data-week="${wid}">Share standings</button>` : ''}`;
 }
@@ -963,7 +1020,7 @@ document.addEventListener('submit', async (e) => {
 
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
-// Refresh every 30s while visible (to see who has played, and catch the 1pm reveal).
+// Refresh every 30s while visible (to see who has played, and catch the midnight rollover).
 let lastRefresh = Date.now();
 function maybeRefresh(force = false) {
   if (document.hidden || sheetEl.classList.contains('open')) return;
@@ -975,7 +1032,7 @@ setInterval(() => maybeRefresh(), 5000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); maybeRefresh(true); });
 setInterval(checkForUpdate, 5 * 60_000);
 
-// Reveal moment: re-render right at 1pm if the page is open.
+// Reveal moment: re-render right when the day closes if the page is open.
 setInterval(() => {
   const lock = G.lockAt(S.today);
   const now = Date.now();

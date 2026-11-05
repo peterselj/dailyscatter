@@ -222,8 +222,8 @@ try {
   await mom.page.waitForSelector('.card.helper');
   log('Later, Mom finished Kenny’s card (no timer)');
 
-  // Late player: starts at 12:58, gets only until 1pm.
-  const sara = await player('sara', ET('12:58'));
+  // Late player: starts at 11:58pm, gets only until midnight.
+  const sara = await player('sara', ET('23:58'));
   await join(sara.page, 'Sara');
   assert.match(await text(sara.page), /only 2:00 left/);
   await sara.page.click('[data-act=start]');
@@ -232,11 +232,21 @@ try {
   await saved(sara.page);
   await sara.page.clock.runFor(125_000);
   await sara.page.waitForSelector('.play.over');
-  log('Sara started at 12:58 and her card locked at 1:00pm');
+  log('Sara started at 11:58pm and her card closed at midnight');
 
-  // --- 1:05pm: results ---------------------------------------------------
-  await josh.page.clock.setSystemTime(ET('13:05'));
+  // --- Midnight: Thursday closes; Friday's Today shows yesterday's results --
+  const FRI = (hhmm) => ET(hhmm, '2026-11-06');
+  await josh.page.clock.setSystemTime(FRI('00:05'));
   await josh.page.goto('/');
+  await josh.page.waitForSelector('.yline');
+  assert.match(await text(josh.page), /You\u2019re first today/i, 'Friday has a fresh card');
+  const fold = await josh.page.$eval('[data-act=start]', (el) => el.getBoundingClientRect().bottom);
+  assert.ok(fold <= josh.page.viewportSize().height - 70, `start button visible without scrolling (bottom ${fold})`);
+  assert.match(await josh.page.innerText('.yline'), /Your score yesterday: 2 · 🏆 Zach won/);
+  assert.equal(await josh.page.$('.week-mini'), null, 'standings wait until you have played');
+  await shot(josh.page, '09a-next-morning');
+  log('Next morning: today\u2019s card is first (no scrolling), with one line for yesterday\u2019s score');
+  await josh.page.click('.yline');
   await josh.page.waitForSelector('.day-head');
   await shot(josh.page, '09-results');
   const row = (page, pid, i) => page.$(`.ansrow[data-pid="${pid}"][data-i="${i}"]`);
@@ -250,13 +260,13 @@ try {
   assert.equal(await pts(josh.page, 'zach', 4), '+3');
   assert.match(await cls(josh.page, 'zach', 1), /dupe/, 'Zach and Mom both wrote three');
   const standings = (await josh.page.$$eval('.standings li', (lis) => lis.map((li) => li.innerText.replace(/\s+/g, ' ')))).join('\n');
-  log(`Results at 1pm:\n${standings.split('\n').filter(Boolean).map((s) => `        ${s}`).join('\n')}`);
+  log(`Thursday\u2019s results:\n${standings.split('\n').filter(Boolean).map((s) => `        ${s}`).join('\n')}`);
   // josh: 0+2+0+0+0 = 2; zach: 1+0+0+1+3 = 5; lowey: 1+0+0+1+1 = 3; kenny: 0+1+2+0+1 = 4; sara: 1
   const totals = Object.fromEntries(await josh.page.$$eval('.standings li', (lis) => lis.map((li) => [li.querySelector('.nm').textContent, li.querySelector('.pts').textContent])));
   assert.deepEqual(totals, { Zach: '5', Kenny: '4', Lowey: '3', Josh: '2', Sara: '1' });
 
   // Zach flags Josh's 2-pointer.
-  await zach.page.clock.setSystemTime(ET('13:10'));
+  await zach.page.clock.setSystemTime(FRI('00:10'));
   await zach.page.goto('/#/day/2026-11-05');
   await zach.page.waitForSelector('.day-head');
   await zach.page.click('.ansrow[data-pid="josh"][data-i="1"]');
@@ -268,7 +278,7 @@ try {
   log('Zach flagged one of Josh’s answers');
 
   // Mom says Zach's "beta" is the same as her "gamma" (pretend it's a typo).
-  await mom.page.clock.setSystemTime(ET('13:12'));
+  await mom.page.clock.setSystemTime(FRI('00:12'));
   await mom.page.goto('/#/day/2026-11-05');
   await mom.page.waitForSelector('.day-head');
   await mom.page.click('.ansrow[data-pid="zach"][data-i="0"]');
@@ -281,7 +291,7 @@ try {
   log('Mom suggested two answers are the same (pending admin)');
 
   // Josh unlocks admin: confirms the merge, zeroes the flagged answer.
-  await josh.page.clock.setSystemTime(ET('13:15'));
+  await josh.page.clock.setSystemTime(FRI('00:15'));
   await josh.page.goto('/#/day/2026-11-05');
   await josh.page.waitForSelector('.day-head');
   await josh.page.click('[data-act=settings]');
@@ -374,12 +384,24 @@ try {
   assert.notEqual(la, L, 'letters do not repeat within the week');
   log(`Josh and Zach hit Roll at the same moment; both got ${la}`);
 
+  // After playing, the week's standings are right there.
+  await a.page.click('[data-act=done-early]');
+  await a.page.click('[data-act=done-early]');
+  await a.page.waitForSelector('.play.over');
+  await a.page.click('text=Done');
+  await a.page.waitForSelector('.week-mini');
+  const wm = await a.page.$eval('.week-mini', (el) => el.getBoundingClientRect().top);
+  assert.ok(wm < a.page.viewportSize().height - 150, `standings visible without scrolling (top ${wm})`);
+  assert.match(await a.page.innerText('.week-mini'), /Kenny\s+5/);
+  await shot(a.page, '14a-after-playing');
+  log('After playing, the week\u2019s standings show right under "locked in"');
+
   // Kenny's page sees Thursday's results too.
   await kenny.page.goto('/kenny.html#/day/2026-11-05');
   await kenny.page.waitForSelector('.day-head');
 
   // --- Playtest mode: works after 1pm, separate data, Reveal / Next day / Wipe.
-  console.log('Playtest mode (Thu 2:00pm, after the real lock)');
+  console.log('Playtest mode');
   const dump = async () => (await fetch(`${BASE}/__mock/dump`)).json();
   const realBefore = JSON.stringify(Object.entries(await dump()).filter(([k]) => !k.startsWith('pt_')));
   const p1 = await player('pt-josh', ET('14:00'), '/?playtest');
@@ -407,7 +429,7 @@ try {
   await p2.page.click('[data-act=done-early]');
   await p2.page.click('[data-act=done-early]');
   await p2.page.waitForSelector('.play.over');
-  log('Two players played a practice card after 1pm');
+  log('Two players played a practice card');
 
   await p1.page.goto('/');
   await p1.page.waitForSelector('[data-act=pt-reveal]');
@@ -449,7 +471,7 @@ try {
   await shot(zach.page, '14-zach-final');
   // Dark mode check
   const dark = await browser.newContext({ ...IPHONE, deviceScaleFactor: 2, baseURL: BASE, colorScheme: 'dark', storageState: await josh.ctx.storageState() });
-  await dark.clock.install({ time: ET('13:30') });
+  await dark.clock.install({ time: FRI('08:00') });
   const dp = await dark.newPage();
   await dp.goto('/#/day/2026-11-05');
   await dp.waitForSelector('.day-head');
