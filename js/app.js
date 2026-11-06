@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061618';
-import * as G from './game.js?v=202611061618';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061618';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061618';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061618';
-import { resultsText } from './share.js?v=202611061618';
+import * as T from './time.js?v=202611061621';
+import * as G from './game.js?v=202611061621';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061621';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061621';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061621';
+import { resultsText } from './share.js?v=202611061621';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -758,8 +758,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
     </section>
     <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
     ${sections}
-    <button class="btn primary big" data-act="share-day" data-day="${id}">Share all answers</button>
-    <p class="fine center">Sends every answer to your group chat, matches crossed out.</p>`;
+    <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
 }
 
 function ordinal(n) {

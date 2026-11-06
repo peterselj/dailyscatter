@@ -372,7 +372,7 @@ try {
   assert.match(dShare, new RegExp(`Kenny: ${L}eleven ${L}twelve \\+3 ⚖️`), 'shared text reflects admin fixes');
   assert.match(dShare, new RegExp(`Josh: ~${L}one ${L}two~ ⚖️`), 'an answer the admin ruled out is crossed out');
   if (process.env.SAVE_SHARE) fs.writeFileSync(process.env.SAVE_SHARE, dShare);
-  log('"Share all answers" on the results page includes the admin\u2019s fixes');
+  log('Share on the results page includes the admin\u2019s fixes');
 
   // Week view + share
   await josh.page.click('a.tab[href="#/week"]');

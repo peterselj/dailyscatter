@@ -14,7 +14,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 - **Reviewing:** anyone can tap an answer to 🚩 **flag** it, or to say it's **the same as** another answer (say, a typo). Only the admin can change scores: nudge any answer's points up or down with − / + (say "To Tell the Truth" deserves 3), or confirm a "same as."
 - **Yesterday tab:** the bottom bar (right to left, so Today sits under your right thumb: Today · Yesterday · This week · Past weeks) has a **Yesterday** tab that opens everyone's answers from yesterday, from anywhere in the app.
 - **Weekly:** weeks run Monday to Sunday. Scores reset every Monday, and past weeks (with winners) stay under **Past weeks**.
-- **Sharing:** **Share all answers** (on any day's results, and the **Share** button next to "Your score yesterday" on Today) opens the iPhone share sheet with the whole day ready to paste into WhatsApp: the standings, every player's answer to every category (matches ~crossed out~, wrong letters marked ✗, admin calls marked ⚖️), and the week so far. If a phone can't open the share sheet, it copies the text instead.
+- **Sharing:** **Share** (at the bottom of any day's results, and the **Share** button next to "Your score yesterday" on Today) opens the iPhone share sheet with the whole day ready to paste into WhatsApp: the standings, every player's answer to every category (matches ~crossed out~, wrong letters marked ✗, admin calls marked ⚖️), and the week so far. If a phone can't open the share sheet, it copies the text instead.
 
 ### Kenny's card (playing with a helper)
 
