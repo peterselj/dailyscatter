@@ -201,4 +201,8 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(e); process.exitCode = 1; });
+main().catch((e) => {
+  if (e.status === 403) console.error('The database refused access. Publish the latest firestore.rules in the Firebase console (Firestore Database > Rules).');
+  console.error(e.message || e);
+  process.exitCode = 1;
+});
