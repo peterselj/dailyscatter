@@ -6,7 +6,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
 
 - **Every day:** the first person to open the app rolls the letter for everyone. Each card has 5 categories and one letter. The categories and letter stay hidden until you hit **Start**, and then you get **3 minutes**. Answers save as you type and lock when time's up, or when you tap "I'm done."
 - **All day:** the card is open until midnight Eastern. Before you've played, Today shows the start button first, with a **Yesterday's results** card under it (the winner and your score; tap it to see everyone's answers or to share them). After you've played, it shows the week's standings so far.
-- **At midnight:** the day closes and everyone's answers are revealed.
+- **When everyone's done, or at midnight:** everyone's answers are revealed as soon as the whole family has finished, or at midnight if someone doesn't play. The admin picks who counts as "the family" in ⚙︎ Settings; Kenny is always optional. Until then, Today shows who it's waiting on.
   - An answer that **matches** someone else's on the same category is struck out for everyone who wrote it. Matching ignores capitals, punctuation, accents and a leading "the/a/an."
   - An answer that **doesn't start with the letter** scores 0.
   - You can't use the **same answer twice** on your own card. The box turns red, the repeat is cleared when you leave it, and a repeat would score 0 anyway.
@@ -38,6 +38,32 @@ Open **https://peterselj.github.io/dailyscatter/?playtest** to practice any time
 
 Playtest stays on for that phone until you tap Exit. Everyone in playtest shares the same practice game, so you can test with a few family members at once.
 
+## Automatic WhatsApp posts
+
+Every 10 minutes, a GitHub Actions job (`.github/workflows/post-results.yml`, which runs `tools/post-results.mjs`) checks whether a day's results are out and posts them to the family WhatsApp group:
+- The whole day goes out: standings, every answer, and the week so far.
+- **Quiet hours:** nothing is posted between 9pm and 9am Eastern. Results that come out then are posted at 9am.
+- **After Sunday's results,** the week's winner and final standings go out too.
+- **Nothing is posted twice.** Each post is recorded in the database. If WhatsApp is down, the job tries again at the next check.
+
+It sends through [GREEN-API](https://green-api.com), which links a WhatsApp number the way WhatsApp Web does. GREEN-API is unofficial, and WhatsApp can ban numbers that act like bots, so **use a spare number, not your personal one.**
+
+**Setup (one time):**
+1. **Get a spare number** and set it up in the **WhatsApp Business** app. That app can run on the same iPhone as your regular WhatsApp, for example using a second eSIM. Name it "Daily Scatter" and add it to the family group.
+2. **Connect it to GREEN-API:** sign up at green-api.com and create an instance on the free Developer plan. Then, in WhatsApp Business, go to Settings → Linked devices → Link a device, and scan the QR code from the GREEN-API console.
+3. **Add three secrets to this repo** (Settings → Secrets and variables → Actions → New repository secret):
+   - `GREEN_API_URL`: the API URL shown in the GREEN-API console, like `https://7103.api.greenapi.com`
+   - `GREEN_API_INSTANCE`: the instance id (`idInstance`)
+   - `GREEN_API_TOKEN`: the instance token (`apiTokenInstance`)
+4. **Find the group's id:** go to Actions → **Post results to WhatsApp** → **Run workflow**, choose **list-groups**, and open the run's log. Copy the family group's id (it ends in `@g.us`) into a secret named `WHATSAPP_CHAT_ID`.
+5. **Optional test chat:** make a small test group with the bot and add its id as `WHATSAPP_TEST_CHAT_ID`. Running the workflow with **playtest** then posts playtest results there right away. Practice results never go to the family group.
+6. **Preview:** run the workflow with **dry-run** to see exactly what it would post, without posting anything.
+
+**Keeping it running:**
+- Open WhatsApp Business on that phone at least every couple of weeks. WhatsApp disconnects linked devices if the phone has been offline for about 14 days.
+- GitHub pauses scheduled jobs in a public repo after 60 days with no commits. If that happens, re-enable the job on the Actions tab.
+- GitHub sometimes runs scheduled jobs a few minutes late.
+
 ## One-time setup (already done unless noted)
 
 1. **GitHub Pages:** in the repo, go to Settings → Pages → Deploy from a branch → `main`, folder `/ (root)`.
@@ -67,6 +93,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/app.js` | Screens, routing, the timer and Kenny mode |
 | `js/game.js` | Reading and writing game data |
 | `js/scoring.js` | All scoring rules (pure functions, unit tested) |
+| `js/reveal.js` | When results come out (midnight, or once the family is done) and quiet hours for posts |
 | `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
 | `js/prompts.js` | Categories, letters and the daily pick (no repeats within a week) |
 | `js/db.js`, `js/codec.js` | Tiny Firestore REST client |
@@ -85,6 +112,7 @@ Requires Node 18 or later. For the end-to-end test you also need Playwright with
 npm test              # unit tests: scoring, time zones, prompts
 npm run e2e           # plays several full days on emulated iPhones (screenshots in tests/screens/)
 npm run devices       # main screens on 6 iPhone sizes (SE to Pro Max, plus large text), dark mode
+npm run poster        # the WhatsApp posting job, through a week of scenarios, against a fake WhatsApp
 npm run check         # all of the above; run before every release
 npm run serve         # local copy at http://localhost:8080 using an in-memory fake database
 ```

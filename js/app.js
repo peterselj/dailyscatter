@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061635';
-import * as G from './game.js?v=202611061635';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061635';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061635';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061635';
-import { resultsText } from './share.js?v=202611061635';
+import * as T from './time.js?v=202611061729';
+import * as G from './game.js?v=202611061729';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061729';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061729';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061729';
+import { resultsText } from './share.js?v=202611061729';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -91,6 +91,7 @@ if (new URLSearchParams(location.search).has('v')) history.replaceState(null, ''
 
 const AS = document.documentElement.dataset.as || null; // e.g. "kenny" on kenny.html
 const S = {
+  names: {}, // player id -> name, for "waiting on Emily, Dylan"
   famOk: store.get('ds.fam') === true,
   me: store.get('ds.me'), // { id, name }
   admin: store.get('ds.admin') === true,
@@ -125,7 +126,7 @@ let playCleanup = null;
 
 async function render() {
   if (playCleanup) { playCleanup(); playCleanup = null; }
-  if (PLAYTEST) { try { await G.loadClock(); } catch { /* offline */ } }
+  try { await Promise.all([PLAYTEST ? G.loadClock() : null, G.loadFamily()]); } catch { /* offline */ }
   S.today = G.todayId();
 
   if (!S.famOk || (!S.me && !AS)) return renderGate();
@@ -254,7 +255,8 @@ async function viewToday() {
   let html = `<h2 class="date">${esc(T.dayLabel(today, true))}</h2>`;
   if (day?.title) html += `<p class="special">✨ ${esc(day.title)}</p>`;
 
-  if (locked) { // only happens in playtest, after "Reveal now"
+  if (locked) { // everyone's done (or, in playtest, someone tapped "Reveal now")
+    if (G.family.length && !G.waitingOn(today, now).length) html += '<p class="everyone">🎉 Everyone’s in! Today’s results are out.</p>';
     html += day ? await viewDay(today, { embedded: true }) : '<div class="card empty"><p>Nobody played today. A new card opens at midnight.</p></div>';
     return html + weekStandings(true);
   }
@@ -431,9 +433,18 @@ function lockPhrase(dayId, now = Date.now()) {
 }
 
 function revealPhrase(dayId, now = Date.now()) {
-  if (PLAYTEST) return 'Playtest: answers appear when someone taps <strong>Reveal now</strong> above.';
-  const lock = G.lockAt(dayId);
-  return `Today’s card is open until midnight. Everyone’s answers are revealed then · in ${esc(T.durationLabel(lock - now))}`;
+  const waiting = G.family.length ? G.waitingOn(dayId, now) : [];
+  const names = waiting.map((id) => esc(nameOf(dayId, id))).join(', ');
+  if (PLAYTEST) {
+    return `Playtest: answers appear when everyone’s done${names ? ` (waiting on ${names})` : ''}, or when someone taps <strong>Reveal now</strong> above.`;
+  }
+  const left = esc(T.durationLabel(T.lockTime(dayId) - now));
+  if (names) return `Results come out as soon as everyone’s done (waiting on ${names}), or at midnight · in ${left}.`;
+  return `Today’s card is open until midnight. Everyone’s answers are revealed then · in ${left}.`;
+}
+
+function nameOf(dayId, id) {
+  return G.days[dayId]?.cards?.[id]?.name || S.names[id] || id;
 }
 
 function currentWeekScores(wid) {
@@ -939,7 +950,10 @@ async function viewPast() {
 
 // --- Settings sheet ---------------------------------------------------------
 
-function openSettings() {
+async function openSettings() {
+  if (S.admin) {
+    try { for (const p of await G.listPlayers()) S.names[p.id] = p.name; } catch { /* offline */ }
+  }
   const base = appUrl();
   const shortcuts = ASSISTED_PLAYERS.map((p) =>
     `<li><a href="${esc(base)}${esc(p.id)}.html" target="_blank" rel="noopener">${esc(p.name)}’s page</a></li>`).join('');
@@ -954,13 +968,27 @@ function openSettings() {
       <p class="fine">In Safari, tap the Share button <span aria-hidden="true">⬆︎</span>, then <strong>Add to Home Screen</strong>. It opens like an app.</p>
       ${!AS && shortcuts ? `<p class="fine">Helping someone play? Open their page, then add <em>that</em> page to your Home Screen too, so you have one icon for you and one for them:</p><ul class="links">${shortcuts}</ul>` : ''}
       <hr>
-      ${S.admin ? `<p class="label">Admin mode is on</p><p class="fine">Tap any revealed answer to set its points or confirm “same as” matches.</p><button class="btn" data-act="admin-off">Turn off admin mode</button>`
+      ${S.admin ? `<p class="label">Admin mode is on</p><p class="fine">Tap any revealed answer to set its points or confirm “same as” matches.</p>
+        ${familyEditor()}
+        <button class="btn" data-act="admin-off">Turn off admin mode</button>`
         : `<form data-form="admin" class="form inline"><input name="code" placeholder="Admin code" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Admin code"><button class="btn">Unlock</button></form>`}
       ${PLAYTEST ? '<hr><p class="label">Playtest</p><p class="fine">Practice data is separate from the real game.</p><button class="btn" data-act="pt-wipe">Wipe all playtest data</button>' : ''}
       <button class="btn ghost big" data-act="close">Close</button>
       <p class="version">Version ${esc(VERSION)}</p>
     </div>`;
   sheetEl.classList.add('open');
+}
+
+function familyEditor() {
+  const people = Object.entries(S.names)
+    .filter(([id]) => !G.assistedById(id))
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  const boxes = people.map(([id, name]) => `<label class="fam"><input type="checkbox" data-act="family" value="${esc(id)}" ${G.family.includes(id) ? 'checked' : ''}> ${esc(name)}</label>`).join('');
+  return `<div class="admin-box">
+    <p class="label">Family: who counts toward “everyone’s done”</p>
+    <p class="fine">When all the checked people have finished, the day’s results come out early (and get posted to WhatsApp). Kenny is always optional. Leave everyone unchecked to wait for midnight.</p>
+    <div class="fam-list">${boxes || '<p class="fine">Nobody has joined yet.</p>'}</div>
+  </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1001,6 +1029,11 @@ document.addEventListener('click', async (e) => {
     case 'settings': openSettings(); break;
     case 'switch':
       S.me = null; store.del('ds.me'); closeSheet(); render(); break;
+    case 'family': {
+      const ids = [...document.querySelectorAll('input[data-act=family]:checked')].map((x) => x.value);
+      try { await G.saveFamily(ids); toast(ids.length ? `Family set: ${ids.length} people.` : 'Family cleared: results wait for midnight.'); } catch (err) { fail(err); }
+      break;
+    }
     case 'admin-off':
       S.admin = false; store.del('ds.admin'); closeSheet(); render(); toast('Admin mode off.'); break;
     case 'close': closeSheet(); break;
@@ -1065,7 +1098,8 @@ setInterval(() => {
   if (S.famOk) {
     const pids = [S.me?.id, ...ASSISTED_PLAYERS.map((p) => p.id)].filter(Boolean);
     try {
-      await G.loadClock();
+      const [, , players] = await Promise.all([G.loadClock(), G.loadFamily(), G.listPlayers()]);
+      for (const p of players) S.names[p.id] = p.name;
       S.today = G.todayId();
       await G.loadDay(S.today);
       await Promise.all(pids.map((pid) => syncBackup(S.today, pid)));

@@ -423,6 +423,20 @@ try {
   const a = await player('a', ET('08:00', '2026-11-07'), '/', await josh.ctx.storageState());
   const b = await player('b', ET('08:00', '2026-11-07'), '/', await zach.ctx.storageState());
   await Promise.all([a.page.waitForSelector('[data-act=start]'), b.page.waitForSelector('[data-act=start]')]);
+  // Admin picks the family: results come out as soon as Josh and Zach are both done.
+  await a.page.click('[data-act=settings]');
+  await a.page.waitForSelector('.fam-list');
+  assert.equal(await a.page.$('input[data-act=family][value=kenny]'), null, 'Kenny is always optional, not in the list');
+  await a.page.check('input[data-act=family][value=josh]');
+  await a.page.waitForSelector('#toast.show:has-text("Family set: 1")');
+  await a.page.check('input[data-act=family][value=zach]');
+  await a.page.waitForSelector('#toast.show:has-text("Family set: 2")');
+  await shot(a.page, '13z-family-settings');
+  await a.page.click('[data-act=close]');
+  await a.page.goto('/');
+  await a.page.waitForSelector('[data-act=start]');
+  log('Admin picked the family (Josh, Zach) in Settings');
+
   await Promise.all([a.page.click('[data-act=start]'), b.page.click('[data-act=start]')]);
   await Promise.all([runUntil(a.page, '.play .answers'), runUntil(b.page, '.play .answers')]);
   const la = (await a.page.innerText('.play .letter-tile')).trim();
@@ -442,6 +456,16 @@ try {
   assert.match(await a.page.innerText('.week-mini'), /Kenny\s+5/);
   await shot(a.page, '14a-after-playing');
   log('After playing, the week\u2019s standings show right under "locked in"');
+  assert.match(await a.page.innerText('.main'), /waiting on Zach/);
+  await b.page.click('[data-act=done-early]');
+  await b.page.click('[data-act=done-early]');
+  await b.page.waitForSelector('.play.over');
+  await a.page.reload();
+  await a.page.waitForSelector('.everyone');
+  assert.match(await a.page.innerText('.everyone'), /Everyone.s in/);
+  assert.ok(await a.page.$('.day-head'), "today's results are showing");
+  await shot(a.page, '14c-everyone-in');
+  log('Once Zach finished too, Today showed "Everyone\u2019s in!" and the results, before midnight');
 
   // A day nobody played says so.
   await a.page.click('a.tab[href="#/yesterday"]');

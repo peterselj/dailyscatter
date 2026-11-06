@@ -50,6 +50,29 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Who counts toward "everyone's done" (set by the admin in Settings).
+    function familyOk() {
+      return request.resource.data.keys().hasOnly(['members', 'updatedAt'])
+        && request.resource.data.members is list
+        && request.resource.data.members.size() <= 30;
+    }
+    match /meta/family {
+      allow read: if true;
+      allow create, update: if familyOk();
+      allow delete: if false;
+    }
+
+    // WhatsApp posting job: one record per posted day (or week), so nothing is posted twice.
+    function postOk() {
+      return request.resource.data.keys().hasOnly(['status', 'at', 'attempts', 'error'])
+        && request.resource.data.status in ['sending', 'sent', 'failed'];
+    }
+    match /posts/{id} {
+      allow read: if true;
+      allow create, update: if postOk();
+      allow delete: if false;
+    }
+
     // --- Playtest (practice) data ---
     match /pt_players/{id} {
       allow read: if true;
@@ -60,6 +83,16 @@ service cloud.firestore {
       allow read: if true;
       allow create: if rollOk(day);
       allow update: if dayUpdateOk(['revealedAt']);
+      allow delete: if true;
+    }
+    match /pt_meta/family {
+      allow read: if true;
+      allow create, update: if familyOk();
+      allow delete: if true;
+    }
+    match /pt_posts/{id} {
+      allow read: if true;
+      allow create, update: if postOk();
       allow delete: if true;
     }
     match /pt_meta/clock {

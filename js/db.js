@@ -1,6 +1,6 @@
 // Tiny Firestore client over the REST API (no SDK: keeps the page light).
-import { FIREBASE } from './config.js?v=202611061635';
-import { encFields, decFields, SAFE_KEY } from './codec.js?v=202611061635';
+import { FIREBASE } from './config.js?v=202611061729';
+import { encFields, decFields, SAFE_KEY } from './codec.js?v=202611061729';
 
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 // Running locally talks to the mock server in tests/ instead of the real database.

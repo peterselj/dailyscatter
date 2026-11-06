@@ -1,0 +1,54 @@
+# Posts each day's results to the family WhatsApp group (see tools/post-results.mjs).
+# Runs every 10 minutes; the script decides whether anything is due.
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   GREEN_API_URL, GREEN_API_INSTANCE, GREEN_API_TOKEN, WHATSAPP_CHAT_ID
+# and optionally WHATSAPP_TEST_CHAT_ID (where "playtest" runs post; never the family group).
+# Without them it just prints what it would post.
+name: Post results to WhatsApp
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: What to do
+        type: choice
+        default: normal
+        options:
+          - normal
+          - dry-run
+          - list-groups
+          - playtest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-results
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Post due results
+        env:
+          MODE: ${{ inputs.mode || 'normal' }}
+          GREEN_API_URL: ${{ secrets.GREEN_API_URL }}
+          GREEN_API_INSTANCE: ${{ secrets.GREEN_API_INSTANCE }}
+          GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}
+          WHATSAPP_CHAT_ID: ${{ secrets.WHATSAPP_CHAT_ID }}
+          WHATSAPP_TEST_CHAT_ID: ${{ secrets.WHATSAPP_TEST_CHAT_ID }}
+        run: |
+          case "$MODE" in
+            dry-run) node tools/post-results.mjs --dry-run ;;
+            list-groups) node tools/post-results.mjs --list-groups ;;
+            playtest) node tools/post-results.mjs --playtest ;;
+            *) node tools/post-results.mjs ;;
+          esac

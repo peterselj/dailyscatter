@@ -6,6 +6,7 @@ import * as T from '../js/time.js';
 import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText } from '../js/share.js';
+import { cardEnd, everyoneDoneAt, revealTime, stillPlaying, postTime } from '../js/reveal.js';
 
 // --- Scoring -------------------------------------------------------------
 
@@ -176,6 +177,35 @@ test('group-chat text lists every answer, crosses out matches, marks wrong lette
   assert.match(txt, /Josh: —/);
   assert.match(txt, /Zach: Gus Grissom \+2/);
   assert.match(txt, /\*Week so far:\* Zach 9 · Josh 4\nhttps:\/\/x\.test\/$/);
+});
+
+test('results come out early once the whole family has finished (Kenny optional)', () => {
+  const at = (hhmm) => Date.parse(`2026-11-05T${hhmm}:00-05:00`);
+  const d = { cards: {
+    josh: { startedAt: at('09:00'), doneAt: at('09:01') },
+    zach: { startedAt: at('10:00') }, // no "I'm done": finishes when the 3 minutes run out
+    kenny: { startedAt: at('08:00'), assisted: true },
+  } };
+  assert.equal(cardEnd(d.cards.zach, '2026-11-05'), at('10:03'));
+  assert.equal(everyoneDoneAt(d, '2026-11-05', ['josh', 'zach']), at('10:03'));
+  assert.equal(everyoneDoneAt(d, '2026-11-05', ['josh', 'zach', 'aly']), Infinity, 'Aly has not started');
+  assert.equal(everyoneDoneAt(d, '2026-11-05', []), Infinity, 'no family set: wait for midnight');
+  assert.equal(revealTime(d, '2026-11-05', ['josh', 'zach']), at('10:03'));
+  assert.equal(revealTime(d, '2026-11-05', ['josh', 'aly']), Date.parse('2026-11-06T05:00:00Z'), 'otherwise midnight');
+  assert.deepEqual(stillPlaying(d, '2026-11-05', ['josh', 'zach', 'aly'], at('10:01')), ['zach', 'aly']);
+  assert.deepEqual(stillPlaying(d, '2026-11-05', ['josh', 'zach'], at('10:04')), []);
+});
+
+test('group-chat posts wait out quiet hours (9pm to 9am Eastern), across daylight saving', () => {
+  const iso = (ms) => new Date(ms).toISOString();
+  assert.equal(iso(postTime(Date.parse('2026-11-05T14:03:00-05:00'))), '2026-11-05T19:03:00.000Z', '2:03pm: right away');
+  assert.equal(iso(postTime(Date.parse('2026-11-05T20:59:00-05:00'))), '2026-11-06T01:59:00.000Z', '8:59pm: right away');
+  assert.equal(iso(postTime(Date.parse('2026-11-05T21:00:00-05:00'))), '2026-11-06T14:00:00.000Z', '9pm: next 9am');
+  assert.equal(iso(postTime(Date.parse('2026-11-06T05:00:00Z'))), '2026-11-06T14:00:00.000Z', 'midnight: 9am');
+  assert.equal(iso(postTime(Date.parse('2026-11-06T07:30:00-05:00'))), '2026-11-06T14:00:00.000Z', '7:30am: 9am');
+  assert.equal(iso(postTime(Date.parse('2026-07-04T09:00:00-04:00'))), '2026-07-04T13:00:00.000Z', '9am in summer: right away');
+  assert.equal(iso(postTime(Date.parse('2026-10-31T23:00:00-04:00'))), '2026-11-01T14:00:00.000Z', 'night of the fall-back switch');
+  assert.equal(iso(postTime(Date.parse('2026-03-08T05:00:00Z'))), '2026-03-08T13:00:00.000Z', 'night of the spring-forward switch');
 });
 
 // --- Time ------------------------------------------------------------------
