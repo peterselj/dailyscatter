@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061600';
-import * as G from './game.js?v=202611061600';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061600';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061600';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061600';
-import { resultsText } from './share.js?v=202611061600';
+import * as T from './time.js?v=202611061610';
+import * as G from './game.js?v=202611061610';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061610';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061610';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061610';
+import { resultsText } from './share.js?v=202611061610';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -152,6 +152,7 @@ function shell(active, body) {
   const who = AS ? `${esc(helped.name)}’s card` : esc(S.me?.name ?? '');
   const tab = (name, label, icon) =>
     `<a href="#/${name === 'today' ? '' : name}" class="tab ${active === name ? 'on' : ''}"><span class="ti" aria-hidden="true">${icon}</span>${label}</a>`;
+  // Today is rightmost, under the right thumb.
   return `
     <header class="top">
       <a href="#/" class="brand"><span class="brand-tile">S</span>Daily Scatter</a>
@@ -160,10 +161,10 @@ function shell(active, body) {
     ${PLAYTEST ? playtestBar() : ''}
     <main class="main">${body}</main>
     <nav class="tabs">
-      ${tab('today', 'Today', '☀︎')}
-      ${tab('yesterday', 'Yesterday', '☾︎')}
-      ${tab('week', 'This week', '★︎')}
       ${tab('past', 'Past weeks', '↺︎')}
+      ${tab('week', 'This week', '★︎')}
+      ${tab('yesterday', 'Yesterday', '☾︎')}
+      ${tab('today', 'Today', '☀︎')}
     </nav>`;
 }
 

@@ -263,6 +263,8 @@ try {
   assert.match(await josh.page.innerText('.date'), /Yesterday\s+Thu, Nov 5/);
   assert.match(await josh.page.getAttribute('a.tab[href="#/yesterday"]', 'class'), /\bon\b/);
   assert.ok(await josh.page.$('[data-act=share-day]'), 'share button on the Yesterday page');
+  assert.deepEqual(await josh.page.$$eval('.tabs .tab', (els) => els.map((e) => e.textContent.replace(/[^A-Za-z ]/g, '').trim())),
+    ['Past weeks', 'This week', 'Yesterday', 'Today'], 'Today is the rightmost tab');
   await shot(josh.page, '09b-yesterday-tab');
   log('Tapping the card (or the Yesterday tab) opens everyone\u2019s answers, with Share at the bottom');
   await shot(josh.page, '09-results');
