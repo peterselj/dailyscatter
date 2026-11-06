@@ -1,15 +1,17 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611061635';
-import * as T from './time.js?v=202611061635';
-import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611061635';
-import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js?v=202611061635';
-import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061635';
-import { PLAYTEST } from './mode.js?v=202611061635';
+import * as db from './db.js?v=202611061722';
+import * as T from './time.js?v=202611061722';
+import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611061722';
+import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js?v=202611061722';
+import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061722';
+import { PLAYTEST } from './mode.js?v=202611061722';
+import { revealTime, stillPlaying } from './reveal.js?v=202611061722';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
 const PLAYERS = PLAYTEST ? 'pt_players' : 'players';
 const CLOCK = 'pt_meta/clock';
+const FAMILY = PLAYTEST ? 'pt_meta/family' : 'meta/family';
 
 // Cache of day documents: id -> data, or null if nobody has rolled that day.
 export const days = {};
@@ -91,10 +93,32 @@ export function todayId() {
   return PLAYTEST ? T.addDays(T.dayId(), dayShift) : T.dayId();
 }
 
+// --- Family: who counts toward "everyone's done" (admin sets it in Settings).
+// Results come out early once all of them have finished the day's card.
+export let family = [];
+
+export async function loadFamily() {
+  const doc = await db.getDoc(FAMILY);
+  family = (doc?.members ?? []).filter((id) => !assistedById(id));
+  return family;
+}
+
+export async function saveFamily(members) {
+  const clean = [...new Set(members)].filter((id) => !assistedById(id));
+  await db.setDoc(FAMILY, { members: clean, updatedAt: Date.now() });
+  family = clean;
+}
+
+export function waitingOn(dayId, now = Date.now()) {
+  return stillPlaying(days[dayId], dayId, family, now);
+}
+
 export function lockAt(dayId) {
-  if (!PLAYTEST) return T.lockTime(dayId);
-  if (dayId < todayId()) return -Infinity;
-  return days[dayId]?.revealedAt ?? Infinity;
+  let base;
+  if (!PLAYTEST) base = T.lockTime(dayId);
+  else if (dayId < todayId()) return -Infinity;
+  else base = days[dayId]?.revealedAt ?? Infinity;
+  return revealTime(days[dayId], dayId, family, base);
 }
 
 export function isRevealed(dayId, now = Date.now()) {
@@ -116,6 +140,8 @@ export async function wipePlaytest() {
   const list = await db.listDocs(DAYS);
   await Promise.all(list.map(({ id }) => db.deleteDoc(`${DAYS}/${id}`)));
   await db.deleteDoc(CLOCK);
+  const posts = await db.listDocs('pt_posts');
+  await Promise.all(posts.map(({ id }) => db.deleteDoc(`pt_posts/${id}`)));
   for (const k of Object.keys(days)) delete days[k];
   dayShift = 0;
 }

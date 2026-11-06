@@ -409,3 +409,9 @@ body.kb .kb-spacer { display: block; height: 60vh; }
   .helper-actions .btn { flex: 1 1 auto; }
   .date { font-size: 24px; }
 }
+
+/* --- Early reveal + family picker ------------------------------------------ */
+.everyone { font-weight: 800; font-size: 17px; margin: -4px 2px 12px; color: var(--ok); }
+.fam-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 12px; }
+.fam { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 36px; }
+.fam input { width: 20px; height: 20px; accent-color: var(--accent); }
