@@ -14,12 +14,13 @@
 //   GREEN_API_INSTANCE  the instance id (idInstance)
 //   GREEN_API_TOKEN     the instance token (apiTokenInstance)
 //   WHATSAPP_CHAT_ID    the family group's id, ending in @g.us (find it with --list-groups)
+//   WHATSAPP_TEST_CHAT_ID  optional: a test chat for --playtest (practice results never go to the family group)
 // Without them, the job runs as a dry run: it prints what it would post.
 //
 // Flags:
 //   --dry-run      print what would be posted; change nothing
-//   --playtest     use the playtest data (pt_*) and ignore quiet hours, to try the
-//                  whole thing with a test group
+//   --playtest     use the playtest data (pt_*), ignore quiet hours, and post to
+//                  WHATSAPP_TEST_CHAT_ID (dry run if that isn't set)
 //   --list-groups  print the WhatsApp groups the linked number is in, with their ids
 import { FIREBASE, ASSISTED_PLAYERS } from '../js/config.js';
 import { encFields, decFields } from '../js/codec.js';
@@ -39,7 +40,7 @@ const GREEN = {
   url: (env.GREEN_API_URL || 'https://api.green-api.com').replace(/\/$/, ''),
   instance: env.GREEN_API_INSTANCE || '',
   token: env.GREEN_API_TOKEN || '',
-  chat: env.WHATSAPP_CHAT_ID || '',
+  chat: (PT ? env.WHATSAPP_TEST_CHAT_ID : env.WHATSAPP_CHAT_ID) || '',
 };
 const configured = !!(GREEN.instance && GREEN.token);
 const DRY = args.has('--dry-run') || !configured || !GREEN.chat;
@@ -147,7 +148,7 @@ async function main() {
   if (args.has('--list-groups')) return listGroups();
   log(`Daily Scatter poster · ${new Date(NOW).toISOString()} · ${PT ? 'PLAYTEST' : 'real game'}${DRY ? ' · dry run' : ''}`);
   if (!configured) log('WhatsApp is not connected yet (GREEN_API_* secrets missing), so this is a dry run.');
-  else if (!GREEN.chat) log('WHATSAPP_CHAT_ID is missing, so this is a dry run. Run with --list-groups to find it.');
+  else if (!GREEN.chat) log(`${PT ? 'WHATSAPP_TEST_CHAT_ID' : 'WHATSAPP_CHAT_ID'} is missing, so this is a dry run. Run with --list-groups to find it.`);
 
   const family = ((await get(C.family))?.members ?? []).filter((id) => !assisted.has(id));
   const names = Object.fromEntries((await list(C.players)).map(({ id, data }) => [id, data.name || id]));

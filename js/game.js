@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611061722';
-import * as T from './time.js?v=202611061722';
-import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611061722';
-import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js?v=202611061722';
-import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061722';
-import { PLAYTEST } from './mode.js?v=202611061722';
-import { revealTime, stillPlaying } from './reveal.js?v=202611061722';
+import * as db from './db.js?v=202611061729';
+import * as T from './time.js?v=202611061729';
+import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611061729';
+import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js?v=202611061729';
+import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061729';
+import { PLAYTEST } from './mode.js?v=202611061729';
+import { revealTime, stillPlaying } from './reveal.js?v=202611061729';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';

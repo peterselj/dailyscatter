@@ -112,7 +112,6 @@ export function createServer() {
     const url = new URL(req.url, 'http://localhost');
     let body = '';
     for await (const chunk of req) body += chunk;
-    if (EMULATOR && url.pathname.startsWith('/__mock/')) return proxy(req, res, url, body);
     if (url.pathname === '/__mock/reset') { docs = new Map(); sent = []; failSends = 0; stats.writes = stats.reads = 0; return send(res, 200, {}); }
     if (url.pathname === '/__mock/sent') return send(res, 200, sent);
     if (url.pathname === '/__mock/fail-send') { failSends = Number(url.searchParams.get('n') || 0); return send(res, 200, {}); }
@@ -127,6 +126,7 @@ export function createServer() {
       return send(res, 404, {});
     }
     if (url.pathname === '/__mock/fake-version') { fakeVersion = url.searchParams.get('v'); return send(res, 200, {}); }
+    if (EMULATOR && url.pathname.startsWith('/__mock/')) return proxy(req, res, url, body);
     if (url.pathname === '/__mock/dump') return send(res, 200, Object.fromEntries(docs));
     if (url.pathname === '/__mock/stats') return send(res, 200, stats);
     if (url.pathname.startsWith('/__mock/')) return handleMock(req, res, url, body);

@@ -9,6 +9,7 @@
     "serve": "node tests/server.mjs",
     "stamp": "node tools/stamp.mjs",
     "devices": "node tests/devices.mjs",
-    "check": "npm test && npm run e2e && npm run devices"
+    "check": "npm test && npm run e2e && npm run devices && npm run poster",
+    "poster": "node tests/poster.mjs"
   }
 }
