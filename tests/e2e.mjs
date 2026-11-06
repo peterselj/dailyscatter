@@ -238,14 +238,17 @@ try {
   const FRI = (hhmm) => ET(hhmm, '2026-11-06');
   await josh.page.clock.setSystemTime(FRI('00:05'));
   await josh.page.goto('/');
-  await josh.page.waitForSelector('.yline');
+  await josh.page.waitForSelector('.yday');
   assert.match(await text(josh.page), /You\u2019re first today/i, 'Friday has a fresh card');
   const fold = await josh.page.$eval('[data-act=start]', (el) => el.getBoundingClientRect().bottom);
   assert.ok(fold <= josh.page.viewportSize().height - 70, `start button visible without scrolling (bottom ${fold})`);
-  assert.match(await josh.page.innerText('.yline'), /^Your score yesterday: 2/);
+  assert.match(await josh.page.innerText('.yday'), /Yesterday.s results[\s\S]*Zach[\s\S]*won with 5 · You: 2/i);
+  const ydBottom = await josh.page.$eval('.yday', (el) => el.getBoundingClientRect().bottom);
+  assert.ok(ydBottom <= josh.page.viewportSize().height - 70, `yesterday's results visible without scrolling too (bottom ${ydBottom})`);
+  assert.ok(fold < await josh.page.$eval('.yday', (el) => el.getBoundingClientRect().top), "today's card comes first");
   assert.equal(await josh.page.$('.week-mini'), null, 'standings wait until you have played');
   await shot(josh.page, '09a-next-morning');
-  log('Next morning: today\u2019s card is first (no scrolling), with one line for yesterday\u2019s score');
+  log('Next morning: today\u2019s card first, yesterday\u2019s results card right under it, both without scrolling');
   await josh.page.click('.share-y');
   await josh.page.waitForSelector('#toast.show');
   const yShare = await josh.page.evaluate(() => navigator.clipboard.readText());
@@ -255,8 +258,13 @@ try {
   assert.match(yShare, /Josh: Xylophone ✗/, 'wrong letter is marked');
   assert.match(yShare, /\*5\. /);
   log(`The Share button next to yesterday\u2019s score copies every answer for the group chat:\n${yShare.split('\n').slice(0, 12).map((x) => `        ${x}`).join('\n')}\n        ...`);
-  await josh.page.click('.yline');
+  await josh.page.click('.yday-top');
   await josh.page.waitForSelector('.day-head');
+  assert.match(await josh.page.innerText('.date'), /Yesterday\s+Thu, Nov 5/);
+  assert.match(await josh.page.getAttribute('a.tab[href="#/yesterday"]', 'class'), /\bon\b/);
+  assert.ok(await josh.page.$('[data-act=share-day]'), 'share button on the Yesterday page');
+  await shot(josh.page, '09b-yesterday-tab');
+  log('Tapping the card (or the Yesterday tab) opens everyone\u2019s answers, with Share at the bottom');
   await shot(josh.page, '09-results');
   const row = (page, pid, i) => page.$(`.ansrow[data-pid="${pid}"][data-i="${i}"]`);
   const cls = async (page, pid, i) => (await row(page, pid, i)).getAttribute('class');
@@ -411,6 +419,12 @@ try {
   assert.match(await a.page.innerText('.week-mini'), /Kenny\s+5/);
   await shot(a.page, '14a-after-playing');
   log('After playing, the week\u2019s standings show right under "locked in"');
+
+  // A day nobody played says so.
+  await a.page.click('a.tab[href="#/yesterday"]');
+  await a.page.waitForSelector('.card.empty');
+  assert.match(await a.page.innerText('.main'), /Yesterday[\s\S]*Nobody played this day/);
+  log('The Yesterday tab on a day nobody played says so');
 
   // Kenny's page sees Thursday's results too.
   await kenny.page.goto('/kenny.html#/day/2026-11-05');
