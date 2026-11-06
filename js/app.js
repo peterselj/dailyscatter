@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061402';
-import * as G from './game.js?v=202611061402';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061402';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061402';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061402';
-import { resultsText } from './share.js?v=202611061402';
+import * as T from './time.js?v=202611061610';
+import * as G from './game.js?v=202611061610';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061610';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061610';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061610';
+import { resultsText } from './share.js?v=202611061610';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -134,7 +134,7 @@ async function render() {
   if (r.name === 'play') return renderPlay(S.me.id, S.me.name, false);
   if (r.name === 'help' && G.assistedById(r.arg)) return renderPlay(r.arg, G.assistedById(r.arg).name, true);
 
-  const views = { today: viewToday, day: viewDay, week: viewWeek, past: viewPast };
+  const views = { today: viewToday, yesterday: viewYesterday, day: viewDay, week: viewWeek, past: viewPast };
   const view = views[r.name] ?? viewToday;
   if (!S.loaded) app.innerHTML = shell(r.name, '<div class="loading">Loading…</div>');
   try {
@@ -152,6 +152,7 @@ function shell(active, body) {
   const who = AS ? `${esc(helped.name)}’s card` : esc(S.me?.name ?? '');
   const tab = (name, label, icon) =>
     `<a href="#/${name === 'today' ? '' : name}" class="tab ${active === name ? 'on' : ''}"><span class="ti" aria-hidden="true">${icon}</span>${label}</a>`;
+  // Today is rightmost, under the right thumb.
   return `
     <header class="top">
       <a href="#/" class="brand"><span class="brand-tile">S</span>Daily Scatter</a>
@@ -160,9 +161,10 @@ function shell(active, body) {
     ${PLAYTEST ? playtestBar() : ''}
     <main class="main">${body}</main>
     <nav class="tabs">
-      ${tab('today', 'Today', '☀︎')}
-      ${tab('week', 'This week', '★︎')}
       ${tab('past', 'Past weeks', '↺︎')}
+      ${tab('week', 'This week', '★︎')}
+      ${tab('yesterday', 'Yesterday', '☾︎')}
+      ${tab('today', 'Today', '☀︎')}
     </nav>`;
 }
 
@@ -273,15 +275,15 @@ async function viewToday() {
 
   html += AS ? assistedCard(day, mainId, mainName, now, lock, true) : myCard(day, now, lock);
   if (!done) {
-    html += yesterdayLine(yid);
+    html += yesterdayCard(yid);
     html += helpers.map((h) => h.html).join('');
     html += whoPlayed(day, now);
     html += `<p class="fine">${revealPhrase(today, now)}</p>`;
     return html;
   }
   html += helpers.filter((h) => !h.finished).map((h) => h.html).join(''); // e.g. Mom's next job: Kenny's card
+  html += yesterdayCard(yid);
   html += weekStandings(true);
-  html += yesterdayLine(yid);
   html += helpers.filter((h) => h.finished).map((h) => h.html).join('');
   html += whoPlayed(day, now);
   html += `<p class="fine">${revealPhrase(today, now)}</p>`;
@@ -370,22 +372,32 @@ function whoPlayed(day, now) {
   return `<section class="card"><p class="label">Played so far</p><div class="chips">${chips}</div></section>`;
 }
 
-// One small line about yesterday ("Your score yesterday: 5 ›"), plus a Share button
-// that sends every answer to the group chat.
-function yesterdayLine(yid) {
+// Yesterday's results on Today: letter, winner, your score, and one tap to
+// everyone's answers (the same page as the Yesterday tab) or to share them.
+function yesterdayCard(yid) {
   const day = G.days[yid];
   if (!day || !revealed(yid)) return '';
-  const { players } = scoreDay(day);
-  if (!Object.values(players).some((p) => p.played)) return '';
+  const { players, order } = scoreDay(day);
+  const playing = order.filter((p) => players[p].played);
+  if (!playing.length) return '';
+  const top = players[playing[0]].total;
+  const champs = playing.filter((p) => players[p].total === top).map((p) => esc(players[p].name)).join(' & ');
   const who = AS || S.me?.id;
   const mine = players[who]?.played ? players[who].total : null;
-  const label = mine === null
-    ? 'See yesterday’s results'
-    : `${AS ? `${esc(helped.name)}’s` : 'Your'} score yesterday: <strong>${mine}</strong>`;
-  return `<div class="yline-row">
-    <a class="yline" href="#/day/${yid}"><span>${label}</span><span class="chev">›</span></a>
-    <button class="btn sm share-y" data-act="share-day" data-day="${yid}" aria-label="Share yesterday’s answers">Share</button>
-  </div>`;
+  const mineLine = mine === null ? '' : ` · ${AS ? esc(helped.name) : 'You'}: <strong>${mine}</strong>`;
+  return `<section class="card yday">
+    <a class="yday-top" href="#/yesterday">
+      <div class="letter-tile sm">${esc(day.letter)}</div>
+      <div class="yd-text">
+        <p class="eyebrow">Yesterday’s results</p>
+        <p>🏆 <strong>${champs}</strong> won with ${top}${mineLine}</p>
+      </div>
+    </a>
+    <div class="row yday-actions">
+      <a class="btn" href="#/yesterday">See everyone’s answers ›</a>
+      <button class="btn share-y" data-act="share-day" data-day="${yid}" aria-label="Share yesterday’s answers">Share</button>
+    </div>
+  </section>`;
 }
 
 function weekStandings(placeholder = false) {
@@ -695,10 +707,16 @@ const playActions = { doneEarly: null, assistDone: null };
 
 // --- Day results ----------------------------------------------------------
 
-async function viewDay(id, { embedded = false } = {}) {
+async function viewYesterday() {
+  return viewDay(T.addDays(S.today, -1), { heading: 'Yesterday' });
+}
+
+async function viewDay(id, { embedded = false, heading = '' } = {}) {
   if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(id)) return '<div class="card empty"><p>Day not found.</p></div>';
   const day = G.days[id] !== undefined && embedded ? G.days[id] : await G.loadDay(id);
-  const top = embedded ? '' : `<a class="back" href="#/week/${T.weekId(id)}">‹ Week of ${esc(T.monthDay(T.weekId(id)))}</a><h2 class="date">${esc(T.dayLabel(id, true))}</h2>`;
+  const top = embedded ? '' : heading
+    ? `<h2 class="date">${esc(heading)} <span class="date-sub">${esc(T.dayLabel(id))}</span></h2>`
+    : `<a class="back" href="#/week/${T.weekId(id)}">‹ Week of ${esc(T.monthDay(T.weekId(id)))}</a><h2 class="date">${esc(T.dayLabel(id, true))}</h2>`;
   if (!day) return `${top}<div class="card empty"><p>Nobody played this day.</p></div>`;
   if (!revealed(id)) {
     return `${top}<div class="card empty"><p>${PLAYTEST ? 'Answers appear when someone taps Reveal now.' : 'Everyone’s answers are revealed at midnight.'}</p></div>`;
@@ -706,6 +724,7 @@ async function viewDay(id, { embedded = false } = {}) {
   const { players, order } = scoreDay(day);
   const playing = order.filter((pid) => players[pid].played);
   const sitting = order.filter((pid) => !players[pid].played);
+  if (!playing.length) return `${top}<div class="card empty"><p>Nobody played this day.</p></div>`;
   const meId = S.me?.id;
 
   const meRank = playing.indexOf(meId);
