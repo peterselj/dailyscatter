@@ -262,13 +262,13 @@ try {
     return {
       noSideScroll: document.documentElement.scrollWidth <= 320,
       tabsOneLine: Math.max(...tabs) < 50 && Math.max(...tabs) - Math.min(...tabs) < 1,
-      shareBesideAnswers: Math.abs(share.top - see.top) < 2,
+      shareSameWidth: Math.abs(share.width - see.width) < 1 && share.top > see.bottom,
     };
   });
   await shot(np, '09c-narrow-dark');
-  assert.deepEqual(fit, { noSideScroll: true, tabsOneLine: true, shareBesideAnswers: true }, 'layout fits a 320px-wide screen');
+  assert.deepEqual(fit, { noSideScroll: true, tabsOneLine: true, shareSameWidth: true }, 'layout fits a 320px-wide screen');
   await narrow.close();
-  log('On a narrow (320px) screen: tab labels on one line, Share beside "See all answers", nothing off the side');
+  log('On a narrow (320px) screen: tab labels on one line, Share as wide as "See all answers", nothing off the side');
 
   await josh.page.click('.share-y');
   await josh.page.waitForSelector('#toast.show');

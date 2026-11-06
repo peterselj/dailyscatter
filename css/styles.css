@@ -385,12 +385,10 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .yday-top { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .yday-top .yd-text { flex: 1; min-width: 0; }
 .yday-top .eyebrow { margin-bottom: 2px; }
-.yday-actions { margin-top: 10px; flex-wrap: nowrap; }
+.yday-actions { margin-top: 10px; flex-direction: column; gap: 8px; }
 .yday-actions .btn { min-height: 40px; padding: 8px 12px; font-size: 15px; }
-.yday-actions .btn { white-space: nowrap; }
-.yday-actions .btn:first-child { flex: 1 1 auto; min-width: 0; }
+.yday-actions .btn { white-space: nowrap; width: 100%; }
 .nowrap { white-space: nowrap; }
-.yday-actions .share-y { flex: none; }
 .date-sub { font-size: 16px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
 .fine.center { text-align: center; }
 .locked-in { padding: 12px 16px; }
