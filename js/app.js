@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061610';
-import * as G from './game.js?v=202611061610';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061610';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061610';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061610';
-import { resultsText } from './share.js?v=202611061610';
+import * as T from './time.js?v=202611061635';
+import * as G from './game.js?v=202611061635';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061635';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061635';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061635';
+import { resultsText } from './share.js?v=202611061635';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -320,7 +320,7 @@ function myCard(day, now, lock) {
     </section>`;
   }
   return `<section class="card locked-in">
-    <p class="eyebrow ok">✓ You’re locked in for today</p>
+    <p class="eyebrow ok">✓ Locked in for today</p>
     <details><summary>Your answers</summary>${answerList(day, card)}</details>
   </section>`;
 }
@@ -384,7 +384,7 @@ function yesterdayCard(yid) {
   const champs = playing.filter((p) => players[p].total === top).map((p) => esc(players[p].name)).join(' & ');
   const who = AS || S.me?.id;
   const mine = players[who]?.played ? players[who].total : null;
-  const mineLine = mine === null ? '' : ` · ${AS ? esc(helped.name) : 'You'}: <strong>${mine}</strong>`;
+  const mineLine = mine === null ? '' : ` · <span class="nowrap">${AS ? esc(helped.name) : 'You'}: <strong>${mine}</strong></span>`;
   return `<section class="card yday">
     <a class="yday-top" href="#/yesterday">
       <div class="letter-tile sm">${esc(day.letter)}</div>
@@ -394,7 +394,7 @@ function yesterdayCard(yid) {
       </div>
     </a>
     <div class="row yday-actions">
-      <a class="btn" href="#/yesterday">See everyone’s answers ›</a>
+      <a class="btn" href="#/yesterday">See all answers ›</a>
       <button class="btn share-y" data-act="share-day" data-day="${yid}" aria-label="Share yesterday’s answers">Share</button>
     </div>
   </section>`;
@@ -758,8 +758,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
     </section>
     <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
     ${sections}
-    <button class="btn primary big" data-act="share-day" data-day="${id}">Share all answers</button>
-    <p class="fine center">Sends every answer to your group chat, matches crossed out.</p>`;
+    <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
 }
 
 function ordinal(n) {

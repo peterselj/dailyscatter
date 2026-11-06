@@ -249,6 +249,27 @@ try {
   assert.equal(await josh.page.$('.week-mini'), null, 'standings wait until you have played');
   await shot(josh.page, '09a-next-morning');
   log('Next morning: today\u2019s card first, yesterday\u2019s results card right under it, both without scrolling');
+  // Narrow screen: an iPhone with large text / zoom is effectively ~320px wide.
+  const narrow = await browser.newContext({ ...IPHONE, viewport: { width: 320, height: 600 }, deviceScaleFactor: 2, baseURL: BASE, colorScheme: 'dark', storageState: await josh.ctx.storageState() });
+  await narrow.clock.install({ time: FRI('08:00') });
+  const np = await narrow.newPage();
+  await np.goto('/');
+  await np.waitForSelector('.yday');
+  const fit = await np.evaluate(() => {
+    const tabs = [...document.querySelectorAll('.tabs .tab')].map((t) => t.getBoundingClientRect().height);
+    const see = document.querySelector('.yday-actions .btn').getBoundingClientRect();
+    const share = document.querySelector('.share-y').getBoundingClientRect();
+    return {
+      noSideScroll: document.documentElement.scrollWidth <= 320,
+      tabsOneLine: Math.max(...tabs) < 50 && Math.max(...tabs) - Math.min(...tabs) < 1,
+      shareSameWidth: Math.abs(share.width - see.width) < 1 && share.top > see.bottom,
+    };
+  });
+  await shot(np, '09c-narrow-dark');
+  assert.deepEqual(fit, { noSideScroll: true, tabsOneLine: true, shareSameWidth: true }, 'layout fits a 320px-wide screen');
+  await narrow.close();
+  log('On a narrow (320px) screen: tab labels on one line, Share as wide as "See all answers", nothing off the side');
+
   await josh.page.click('.share-y');
   await josh.page.waitForSelector('#toast.show');
   const yShare = await josh.page.evaluate(() => navigator.clipboard.readText());
@@ -351,7 +372,7 @@ try {
   assert.match(dShare, new RegExp(`Kenny: ${L}eleven ${L}twelve \\+3 ⚖️`), 'shared text reflects admin fixes');
   assert.match(dShare, new RegExp(`Josh: ~${L}one ${L}two~ ⚖️`), 'an answer the admin ruled out is crossed out');
   if (process.env.SAVE_SHARE) fs.writeFileSync(process.env.SAVE_SHARE, dShare);
-  log('"Share all answers" on the results page includes the admin\u2019s fixes');
+  log('Share on the results page includes the admin\u2019s fixes');
 
   // Week view + share
   await josh.page.click('a.tab[href="#/week"]');
