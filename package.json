@@ -7,6 +7,8 @@
     "test": "node --test tests/unit.test.mjs",
     "e2e": "node tests/e2e.mjs",
     "serve": "node tests/server.mjs",
-    "stamp": "node tools/stamp.mjs"
+    "stamp": "node tools/stamp.mjs",
+    "devices": "node tests/devices.mjs",
+    "check": "npm test && npm run e2e && npm run devices"
   }
 }

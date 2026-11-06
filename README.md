@@ -84,6 +84,8 @@ Requires Node 18 or later. For the end-to-end test you also need Playwright with
 ```bash
 npm test              # unit tests: scoring, time zones, prompts
 npm run e2e           # plays several full days on emulated iPhones (screenshots in tests/screens/)
+npm run devices       # main screens on 6 iPhone sizes (SE to Pro Max, plus large text), dark mode
+npm run check         # all of the above; run before every release
 npm run serve         # local copy at http://localhost:8080 using an in-memory fake database
 ```
 
