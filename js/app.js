@@ -1,8 +1,9 @@
-import * as T from './time.js?v=202611052217';
-import * as G from './game.js?v=202611052217';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611052217';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611052217';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611052217';
+import * as T from './time.js?v=202611061402';
+import * as G from './game.js?v=202611061402';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061402';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061402';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061402';
+import { resultsText } from './share.js?v=202611061402';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -369,19 +370,22 @@ function whoPlayed(day, now) {
   return `<section class="card"><p class="label">Played so far</p><div class="chips">${chips}</div></section>`;
 }
 
-// One small line about yesterday, e.g. "Your score yesterday: 5 · 🏆 Zach won ›".
+// One small line about yesterday ("Your score yesterday: 5 ›"), plus a Share button
+// that sends every answer to the group chat.
 function yesterdayLine(yid) {
   const day = G.days[yid];
   if (!day || !revealed(yid)) return '';
-  const { players, order } = scoreDay(day);
-  const playing = order.filter((p) => players[p].played);
-  if (!playing.length) return '';
-  const top = players[playing[0]].total;
-  const champs = playing.filter((p) => players[p].total === top).map((p) => esc(players[p].name)).join(' & ');
+  const { players } = scoreDay(day);
+  if (!Object.values(players).some((p) => p.played)) return '';
   const who = AS || S.me?.id;
   const mine = players[who]?.played ? players[who].total : null;
-  const lead = mine === null ? 'Yesterday' : `${AS ? `${esc(helped.name)}’s` : 'Your'} score yesterday: <strong>${mine}</strong>`;
-  return `<a class="yline" href="#/day/${yid}"><span>${lead} · 🏆 ${champs} won${mine === null ? ` with ${top}` : ''}</span><span class="chev">›</span></a>`;
+  const label = mine === null
+    ? 'See yesterday’s results'
+    : `${AS ? `${esc(helped.name)}’s` : 'Your'} score yesterday: <strong>${mine}</strong>`;
+  return `<div class="yline-row">
+    <a class="yline" href="#/day/${yid}"><span>${label}</span><span class="chev">›</span></a>
+    <button class="btn sm share-y" data-act="share-day" data-day="${yid}" aria-label="Share yesterday’s answers">Share</button>
+  </div>`;
 }
 
 function weekStandings(placeholder = false) {
@@ -735,7 +739,8 @@ async function viewDay(id, { embedded = false } = {}) {
     </section>
     <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
     ${sections}
-    <button class="btn big" data-act="share-day" data-day="${id}">Share results</button>`;
+    <button class="btn primary big" data-act="share-day" data-day="${id}">Share all answers</button>
+    <p class="fine center">Sends every answer to your group chat, matches crossed out.</p>`;
 }
 
 function ordinal(n) {
@@ -749,18 +754,16 @@ function rankLabel(ids, players, i) {
   return ['🥇', '🥈', '🥉'][first] ?? `${first + 1}`;
 }
 
+// The whole day for the group chat: standings, every answer, and the week so far.
 function dayShareText(id) {
-  const day = G.days[id];
-  const { players, order } = scoreDay(day);
-  const playing = order.filter((p) => players[p].played);
-  const medals = ['🥇', '🥈', '🥉'];
-  const lines = playing.map((p, i) => {
-    const first = playing.findIndex((x) => players[x].total === players[p].total);
-    return `${medals[first] ?? `${first + 1}.`} ${players[p].name} ${players[p].total}`;
+  const wid = T.weekId(id);
+  return resultsText({
+    day: G.days[id],
+    dayLabel: T.dayLabel(id),
+    weekRows: currentWeekScores(wid).rows,
+    weekFinal: wid !== T.weekId(S.today) || revealed(T.addDays(wid, 6)),
+    url: appUrl(),
   });
-  const wk = currentWeekScores(T.weekId(id));
-  const week = wk.rows.slice(0, 5).map((r) => `${r.name} ${r.total}`).join(', ');
-  return `Daily Scatter · ${T.dayLabel(id)} · Letter ${day.letter}\n${lines.join('\n')}\n\nWeek so far: ${week}\n${appUrl()}`;
 }
 
 function appUrl() {

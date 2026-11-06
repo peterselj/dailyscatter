@@ -242,10 +242,19 @@ try {
   assert.match(await text(josh.page), /You\u2019re first today/i, 'Friday has a fresh card');
   const fold = await josh.page.$eval('[data-act=start]', (el) => el.getBoundingClientRect().bottom);
   assert.ok(fold <= josh.page.viewportSize().height - 70, `start button visible without scrolling (bottom ${fold})`);
-  assert.match(await josh.page.innerText('.yline'), /Your score yesterday: 2 · 🏆 Zach won/);
+  assert.match(await josh.page.innerText('.yline'), /^Your score yesterday: 2/);
   assert.equal(await josh.page.$('.week-mini'), null, 'standings wait until you have played');
   await shot(josh.page, '09a-next-morning');
   log('Next morning: today\u2019s card is first (no scrolling), with one line for yesterday\u2019s score');
+  await josh.page.click('.share-y');
+  await josh.page.waitForSelector('#toast.show');
+  const yShare = await josh.page.evaluate(() => navigator.clipboard.readText());
+  assert.match(yShare, /Letter \*[A-Z]\*/);
+  assert.match(yShare, new RegExp(`Josh: ~${L}alpha~`), 'matched answers are crossed out');
+  assert.match(yShare, new RegExp(`Kenny: ~${L}alpha~`));
+  assert.match(yShare, /Josh: Xylophone ✗/, 'wrong letter is marked');
+  assert.match(yShare, /\*5\. /);
+  log(`The Share button next to yesterday\u2019s score copies every answer for the group chat:\n${yShare.split('\n').slice(0, 12).map((x) => `        ${x}`).join('\n')}\n        ...`);
   await josh.page.click('.yline');
   await josh.page.waitForSelector('.day-head');
   await shot(josh.page, '09-results');
@@ -326,6 +335,13 @@ try {
   const after = Object.fromEntries(await josh.page.$$eval('.standings li', (lis) => lis.map((li) => [li.querySelector('.nm').textContent, li.querySelector('.pts').textContent])));
   assert.deepEqual(after, { Kenny: '5', Zach: '4', Lowey: '2', Sara: '1', Josh: '0' });
   log('Admin confirmed the merge, stepped one answer down to 0 and another up to 3; scores updated');
+  await josh.page.click('[data-act=share-day]');
+  await josh.page.waitForSelector('#toast.show');
+  const dShare = await josh.page.evaluate(() => navigator.clipboard.readText());
+  assert.match(dShare, new RegExp(`Kenny: ${L}eleven ${L}twelve \\+3 ⚖️`), 'shared text reflects admin fixes');
+  assert.match(dShare, new RegExp(`Josh: ~${L}one ${L}two~ ⚖️`), 'an answer the admin ruled out is crossed out');
+  if (process.env.SAVE_SHARE) fs.writeFileSync(process.env.SAVE_SHARE, dShare);
+  log('"Share all answers" on the results page includes the admin\u2019s fixes');
 
   // Week view + share
   await josh.page.click('a.tab[href="#/week"]');

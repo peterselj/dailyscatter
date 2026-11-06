@@ -5,6 +5,7 @@ import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, override
 import * as T from '../js/time.js';
 import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
+import { resultsText } from '../js/share.js';
 
 // --- Scoring -------------------------------------------------------------
 
@@ -157,6 +158,24 @@ test('every file reference carries the same version stamp', async () => {
     for (const m of src.matchAll(/\?v=([\w-]+)/g)) stamps.add(m[1]);
   }
   assert.equal(stamps.size, 1, `mixed versions: ${[...stamps].join(', ')}; run npm run stamp`);
+});
+
+test('group-chat text lists every answer, crosses out matches, marks wrong letters', () => {
+  const d = day({
+    josh: card('Josh', ['Grapes', 'Mickey *Mantle*', 'Godzilla', '', 'Gus']),
+    zach: card('Zach', ['grapes', 'Goat', 'Godzilla', 'Gary', 'Gus Grissom']),
+    kenny: { name: 'Kenny', skipped: true },
+  }, { flags: { f: { target: 'zach', idx: 1, by: 'josh' } }, overrides: { [overrideKey('zach', 3)]: { points: 0 } } });
+  const txt = resultsText({ day: d, dayLabel: 'Thu, Nov 5', weekRows: [{ name: 'Zach', total: 9 }, { name: 'Josh', total: 4 }], url: 'https://x.test/' });
+  assert.match(txt, /^🎲 \*Daily Scatter\* · Thu, Nov 5 · Letter \*G\*/);
+  assert.match(txt, /🥇 Zach 3\n🥈 Josh 1\n😴 Kenny sat out/);
+  assert.match(txt, /Zach: ~Gary~ ⚖️/, 'admin ruled it out');
+  assert.match(txt, /\*1\. A fruit\*\nZach: ~grapes~\nJosh: ~Grapes~/);
+  assert.match(txt, /Josh: Mickey Mantle ✗/, 'formatting characters stripped; wrong letter marked');
+  assert.match(txt, /Zach: Goat \+1 🚩/);
+  assert.match(txt, /Josh: —/);
+  assert.match(txt, /Zach: Gus Grissom \+2/);
+  assert.match(txt, /\*Week so far:\* Zach 9 · Josh 4\nhttps:\/\/x\.test\/$/);
 });
 
 // --- Time ------------------------------------------------------------------

@@ -380,9 +380,12 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .version { text-align: center; font-size: 12px; color: var(--dim); margin: 0; }
 
 /* --- Today: yesterday's results + this week -------------------------------- */
-.yline { display: flex; align-items: center; gap: 6px; margin: -2px 4px 14px; color: var(--muted); font-size: 15px; text-decoration: none; }
+.yline-row { display: flex; align-items: center; gap: 8px; margin: -2px 2px 14px; }
+.yline { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 15px; text-decoration: none; }
+.share-y { flex: none; }
+.fine.center { text-align: center; }
 .yline strong { color: var(--ink); }
-.yline .chev { margin-left: auto; font-size: 20px; }
+.yline .chev { font-size: 20px; }
 .locked-in { padding: 12px 16px; }
 .locked-in .eyebrow { margin: 0; font-size: 14px; }
 .locked-in details { margin-top: 8px; }
