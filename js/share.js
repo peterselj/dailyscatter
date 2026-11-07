@@ -1,6 +1,6 @@
 // Builds the text for sharing a day's results into a group chat (WhatsApp,
 // iMessage...). WhatsApp formatting: *bold*, ~strikethrough~.
-import { scoreDay } from './scoring.js?v=202611061729';
+import { scoreDay } from './scoring.js?v=202611071534';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -45,7 +45,7 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
     }
   });
 
-  out.push('', '~crossed out~ = matched someone · ✗ = wrong letter · 🚩 = flagged · ⚖️ = admin’s call');
+  out.push('', '~crossed out~ = matched someone · ✗ = no word with the letter · 🚩 = flagged · ⚖️ = admin’s call');
   if (weekRows.length) {
     out.push('', `*${weekFinal ? 'Final for the week' : 'Week so far'}:* ${weekRows.map((r) => `${clean(r.name)} ${r.total}`).join(' · ')}`);
   }

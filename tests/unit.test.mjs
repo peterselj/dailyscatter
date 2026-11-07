@@ -30,6 +30,19 @@ test('validity checks the first letter after the article', () => {
   assert.ok(isValid('Éclair', 'E'));
 });
 
+test('house rule: any main word with the letter counts (friendlier than official first-word rule)', () => {
+  assert.ok(isValid('Eat Pizza', 'P'));
+  assert.ok(isValid('Play Music', 'P'));
+  assert.ok(isValid('Of Mice and Men', 'O'), 'official first-word rule still counts');
+  assert.ok(isValid('Fish and chips', 'C'));
+  assert.ok(!isValid('Bread and butter', 'A'), '"and" is a little word, it does not count');
+  assert.ok(!isValid('The Godfather', 'T'), '"the" does not count');
+  assert.ok(!isValid('Eat Cake', 'P'));
+  assert.equal(basePoints('Eat Pizza', 'P'), 1);
+  assert.equal(basePoints('Pick Peppers', 'P'), 2);
+  assert.equal(basePoints('Of Mice and Men', 'O'), 1);
+});
+
 test('alliteration bonus: one point per word with the letter, filler skipped', () => {
   assert.equal(basePoints('Mickey Mantle', 'M'), 2);
   assert.equal(basePoints('mickey mouse', 'M'), 2);

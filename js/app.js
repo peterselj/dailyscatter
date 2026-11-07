@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611061729';
-import * as G from './game.js?v=202611061729';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611061729';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611061729';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611061729';
-import { resultsText } from './share.js?v=202611061729';
+import * as T from './time.js?v=202611071534';
+import * as G from './game.js?v=202611071534';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611071534';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611071534';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611071534';
+import { resultsText } from './share.js?v=202611071534';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -812,7 +812,7 @@ function openAnswerSheet(dayId, pid, idx) {
 
   const info = [];
   if (!a.text) info.push('No answer.');
-  else if (!a.valid) info.push(`Doesn’t start with ${esc(day.letter)}, so no points.`);
+  else if (!a.valid) info.push(`No word starts with ${esc(day.letter)}, so no points.`);
   if (a.repeatOf !== null) info.push(`Struck: ${esc(players[pid].name)} already used this for #${a.repeatOf + 1}.`);
   if (a.dupe) info.push(`Struck: same as ${a.dupeWith.map((x) => esc(nameOf(x))).join(', ')}.`);
   if (a.flags.length) info.push(`🚩 Flagged by ${a.flags.map((x) => esc(nameOf(x))).join(', ')}.`);
