@@ -1,8 +1,11 @@
 // Pure scoring logic. No DOM, no network: everything here is unit-tested.
 //
 // Rules:
-//  - An answer is valid if it starts with the day's letter (ignoring a leading
-//    "the", "a" or "an", case, accents and punctuation).
+//  - An answer is valid if any of its main words starts with the day's letter
+//    ("Eat Pizza" counts for P), not counting little words like "the", "of"
+//    or "and". This house rule is friendlier than the official Scattergories
+//    rule (the first word must start with the letter), which still counts too,
+//    so "Of Mice and Men" works for O. Case, accents and punctuation are ignored.
 //  - Answers to the same prompt that match each other are struck out (0 points)
 //    for everyone who wrote them. Matching ignores case, punctuation, accents
 //    and a leading article. An admin can also confirm two different spellings
@@ -43,8 +46,10 @@ export function normalize(text) {
 }
 
 export function isValid(text, letter) {
+  const l = String(letter).toLowerCase();
   const n = normalize(text);
-  return n.length > 0 && n[0] === String(letter).toLowerCase();
+  if (n && n[0] === l) return true; // official rule: first word (after a/an/the)
+  return words(text).some((w) => !FILLER.has(w) && w[0] === l); // house rule: any main word
 }
 
 export function basePoints(text, letter) {
