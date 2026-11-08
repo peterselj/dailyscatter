@@ -6,7 +6,7 @@ import * as T from '../js/time.js';
 import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText } from '../js/share.js';
-import { cardEnd, everyoneDoneAt, revealTime, stillPlaying, postTime } from '../js/reveal.js';
+import { cardEnd, everyoneDoneAt, revealTime, stillPlaying, postTime, inQuietHours } from '../js/reveal.js';
 
 // --- Scoring -------------------------------------------------------------
 
@@ -219,6 +219,10 @@ test('group-chat posts wait out quiet hours (9pm to 9am Eastern), across dayligh
   assert.equal(iso(postTime(Date.parse('2026-07-04T09:00:00-04:00'))), '2026-07-04T13:00:00.000Z', '9am in summer: right away');
   assert.equal(iso(postTime(Date.parse('2026-10-31T23:00:00-04:00'))), '2026-11-01T14:00:00.000Z', 'night of the fall-back switch');
   assert.equal(iso(postTime(Date.parse('2026-03-08T05:00:00Z'))), '2026-03-08T13:00:00.000Z', 'night of the spring-forward switch');
+  assert.equal(inQuietHours(Date.parse('2026-11-07T22:15:00-05:00')), true);
+  assert.equal(inQuietHours(Date.parse('2026-11-08T08:59:00-05:00')), true);
+  assert.equal(inQuietHours(Date.parse('2026-11-08T09:00:00-05:00')), false);
+  assert.equal(inQuietHours(Date.parse('2026-11-08T20:59:00-05:00')), false);
 });
 
 // --- Time ------------------------------------------------------------------

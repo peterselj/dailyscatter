@@ -27,7 +27,7 @@ import { encFields, decFields } from '../js/codec.js';
 import * as T from '../js/time.js';
 import { scoreDay, scoreWeek } from '../js/scoring.js';
 import { resultsText, weekText } from '../js/share.js';
-import { revealTime, postTime } from '../js/reveal.js';
+import { revealTime, postTime, inQuietHours } from '../js/reveal.js';
 
 const args = new Set(process.argv.slice(2));
 const PT = args.has('--playtest');
@@ -175,6 +175,8 @@ async function main() {
     if (NOW < at) { log(`${id}: not revealed yet`); continue; }
     const when = PT ? NOW : postTime(at);
     if (NOW < when) { log(`${id}: revealed, waiting until ${T.clockLabel(when)} ET (quiet hours)`); continue; }
+    // A post that's running late still never goes out during quiet hours.
+    if (!PT && inQuietHours(NOW)) { log(`${id}: due, but it's quiet hours; waiting until 9:00am ET`); continue; }
     if (!PT && NOW - when > STALE_AFTER) { log(`${id}: too old to post now, skipping`); continue; }
 
     // The week so far (revealed days only).

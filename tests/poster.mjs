@@ -118,6 +118,19 @@ try {
   assert.equal((await dump())['posts/2026-11-12'].fields.status.stringValue, 'sent');
   ok('WhatsApp down: recorded as failed, then posted on the next check');
 
+  // Everyone done at 8:31pm, but the check runs late (9:15pm): it waits for 9am instead of posting at night.
+  await put('days/2026-11-14', {
+    letter: 'L', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-14', '09:00'),
+    cards: { josh: done('Josh', '2026-11-14', '09:00', 'L'), z: done('Z', '2026-11-14', '10:00', 'L'), aly: done('Aly', '2026-11-14', '20:30', 'L') },
+  });
+  r = await job(ET('2026-11-14', '21:15'));
+  assert.match(r.out, /2026-11-14: due, but it's quiet hours; waiting until 9:00am ET/);
+  assert.equal((await sent()).length, 4, 'nothing posted at 9:15pm');
+  r = await job(ET('2026-11-15', '09:05'));
+  assert.equal((await sent()).length, 5, 'posted at 9:05am');
+  assert.match((await sent())[4].message, /Sat, Nov 14 · Letter \*L\*/);
+  ok('A post that was running late waits out quiet hours too');
+
   // Fri: played, but the job was off until Sunday -> too old, skipped (no surprise spam).
   await put('days/2026-11-13', { letter: 'R', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-13', '09:00'), cards: { josh: done('Josh', '2026-11-13', '09:00', 'R') } });
 
@@ -129,15 +142,15 @@ try {
   r = await job(ET('2026-11-15', '16:10'));
   assert.match(r.out, /2026-11-13: too old to post now, skipping/);
   msgs = await sent();
-  assert.equal(msgs.length, 6, 'Sunday results + the week');
-  assert.match(msgs[4].message, /Sun, Nov 15 · Letter \*T\*/);
-  assert.match(msgs[4].message, /\*Final for the week:\*/);
-  assert.match(msgs[5].message, /^🏆 \*Daily Scatter · Week of Nov 9 – Nov 15\*\n\n.+ (wins|tie) the week with \d+ points!/);
-  assert.match(msgs[5].message, /6 days played/);
+  assert.equal(msgs.length, 7, 'Sunday results + the week');
+  assert.match(msgs[5].message, /Sun, Nov 15 · Letter \*T\*/);
+  assert.match(msgs[5].message, /\*Final for the week:\*/);
+  assert.match(msgs[6].message, /^🏆 \*Daily Scatter · Week of Nov 9 – Nov 15\*\n\n.+ (wins|tie) the week with \d+ points!/);
+  assert.match(msgs[6].message, /7 days played/);
   ok('Sunday: the day’s results, then the week’s winner and final standings');
   ok('An old unposted day (job was off) is skipped instead of posted late');
   await job(ET('2026-11-15', '16:20'));
-  assert.equal((await sent()).length, 6, 'week message not repeated');
+  assert.equal((await sent()).length, 7, 'week message not repeated');
 
   // Dry run: no WhatsApp settings -> prints, changes nothing.
   await put('days/2026-11-16', { letter: 'M', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-16', '09:00'), cards: { josh: done('Josh', '2026-11-16', '09:00', 'M') } });
@@ -147,7 +160,7 @@ try {
   assert.match(r.out, /WhatsApp is not connected yet/);
   assert.match(r.out, /----- would post \(2026-11-16\) -----\n🎲 \*Daily Scatter\* · Mon, Nov 16/);
   assert.equal(JSON.stringify(await dump()), before, 'dry run changes nothing');
-  assert.equal((await sent()).length, 6);
+  assert.equal((await sent()).length, 7);
   assert.ok(!r.out.includes('secret-token'), 'token never printed');
   ok('Not connected yet: dry run prints the message and changes nothing');
 
@@ -165,12 +178,12 @@ try {
   });
   r = await job(ET('2026-11-17', '22:10'), { flags: ['--playtest'] });
   assert.match(r.out, /WHATSAPP_TEST_CHAT_ID is missing, so this is a dry run/);
-  assert.equal((await sent()).length, 6, 'no test chat set: practice results are never sent to the family group');
+  assert.equal((await sent()).length, 7, 'no test chat set: practice results are never sent to the family group');
   r = await job(ET('2026-11-17', '22:10'), { flags: ['--playtest'], env: { ...WA, WHATSAPP_TEST_CHAT_ID: '120363999@g.us' } });
   msgs = await sent();
-  assert.equal(msgs.length, 7, 'playtest posts right away, even at 10pm');
-  assert.equal(msgs[6].chatId, '120363999@g.us', 'to the test chat, not the family group');
-  assert.match(msgs[6].message, /Letter \*C\*\n🎉 Everyone finished!/);
+  assert.equal(msgs.length, 8, 'playtest posts right away, even at 10pm');
+  assert.equal(msgs[7].chatId, '120363999@g.us', 'to the test chat, not the family group');
+  assert.match(msgs[7].message, /Letter \*C\*\n🎉 Everyone finished!/);
   assert.equal((await dump())['pt_posts/2026-11-17'].fields.status.stringValue, 'sent');
   assert.equal((await dump())['posts/2026-11-17'], undefined, 'real markers untouched');
   ok('Playtest mode posts practice results right away, kept separate from the real game');
