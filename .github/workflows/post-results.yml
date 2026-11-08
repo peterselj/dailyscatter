@@ -1,5 +1,7 @@
 # Posts each day's results to the family WhatsApp group (see tools/post-results.mjs).
-# Runs every 10 minutes; the script decides whether anything is due.
+# Started every 10 minutes by a Google Apps Script timer (tools/apps-script-trigger.gs),
+# because GitHub's own schedule below is best-effort and often skips runs for hours.
+# The schedule stays on as a backup. The script decides whether anything is due.
 # Needs these repository secrets (Settings > Secrets and variables > Actions):
 #   GREEN_API_URL, GREEN_API_INSTANCE, GREEN_API_TOKEN, WHATSAPP_CHAT_ID
 # and optionally WHATSAPP_TEST_CHAT_ID (where "playtest" runs post; never the family group).

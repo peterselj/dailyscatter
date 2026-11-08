@@ -40,7 +40,7 @@ Playtest stays on for that phone until you tap Exit. Everyone in playtest shares
 
 ## Automatic WhatsApp posts
 
-Every 10 minutes, a GitHub Actions job (`.github/workflows/post-results.yml`, which runs `tools/post-results.mjs`) checks whether a day's results are out and posts them to the family WhatsApp group:
+Every 10 minutes (started by a Google Apps Script timer; see "A reliable clock" below), a GitHub Actions job (`.github/workflows/post-results.yml`, which runs `tools/post-results.mjs`) checks whether a day's results are out and posts them to the family WhatsApp group:
 - The whole day goes out: standings, every answer, and the week so far.
 - **Quiet hours:** nothing is posted between 9pm and 9am Eastern. Results that come out then are posted at 9am.
 - **After Sunday's results,** the week's winner and final standings go out too.
@@ -58,6 +58,19 @@ It sends through [GREEN-API](https://green-api.com), which links a WhatsApp numb
 4. **Find the group's id:** go to Actions → **Post results to WhatsApp** → **Run workflow**, choose **list-groups**, and open the run's log. Copy the family group's id (it ends in `@g.us`) into a secret named `WHATSAPP_CHAT_ID`.
 5. **Optional test chat:** make a small test group with the bot and add its id as `WHATSAPP_TEST_CHAT_ID`. Running the workflow with **playtest** then posts playtest results there right away. Practice results never go to the family group.
 6. **Preview:** run the workflow with **dry-run** to see exactly what it would post, without posting anything.
+
+**A reliable clock (needed):** GitHub's built-in schedule is best-effort. In practice it skipped runs for hours at a time, including the 9am post. So a Google Apps Script timer starts the job every 10 minutes instead; the GitHub schedule stays on as a backup.
+1. **Make a GitHub token that can only start this job:** github.com → your picture → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token.
+   - Name: "Daily Scatter clock". Expiration: the longest offered (add a calendar reminder to renew it).
+   - Repository access: **Only select repositories** → `dailyscatter`.
+   - Permissions → Repository permissions → **Actions: Read and write**. Nothing else.
+   - Generate it and copy the token.
+2. **Make the script:** go to script.google.com → **New project**. Name it "Daily Scatter clock", delete what's there, and paste in the contents of `tools/apps-script-trigger.gs`. Click Save.
+3. **Store the token in the script:** ⚙︎ Project Settings → Script Properties → **Add script property**. Property `GITHUB_TOKEN`, value: the token. Save.
+4. **Test it:** back in the Editor, pick `pokeDailyScatter` in the toolbar and click **Run**, then approve the permissions Google asks for. It should finish with no error, and a new "Post results to WhatsApp" run should appear on GitHub's Actions tab.
+5. **Start the timer:** ⏰ Triggers → **Add Trigger** → function `pokeDailyScatter`, event source **Time-driven**, **Minutes timer**, **Every 10 minutes** → Save.
+
+If the token expires or something breaks, Google emails you about the failed runs.
 
 **Keeping it running:**
 - Open WhatsApp Business on that phone at least every couple of weeks. WhatsApp disconnects linked devices if the phone has been offline for about 14 days.
