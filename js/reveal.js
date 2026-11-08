@@ -1,8 +1,8 @@
 // When a day's results come out, and when it's polite to post them.
 // Pure functions, shared by the app and the WhatsApp posting job, so the two
 // always agree. No DOM, no network.
-import { lockTime, etInstant, dayId as dayIdOf, addDays } from './time.js?v=202611071534';
-import { TIMER_SECONDS } from './config.js?v=202611071534';
+import { lockTime, etInstant, dayId as dayIdOf, addDays } from './time.js?v=202611080146';
+import { TIMER_SECONDS } from './config.js?v=202611080146';
 
 // The moment a timed card is finished: 3 minutes after start, or when the
 // player tapped "I'm done", or the end of the day, whichever comes first.
@@ -47,6 +47,12 @@ export const QUIET_END = 9;
 function etHour(ms) {
   const id = dayIdOf(ms);
   return (ms - etInstant(id, 0)) / 3600e3; // hours since Eastern midnight (DST-safe)
+}
+
+/** True between 9pm and 9am Eastern. */
+export function inQuietHours(ms) {
+  const h = etHour(ms);
+  return h < QUIET_END || h >= QUIET_START;
 }
 
 /** When to post results that came out at `revealAt`: right away, unless it's quiet hours. */
