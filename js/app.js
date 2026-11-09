@@ -1,9 +1,9 @@
-import * as T from './time.js?v=202611080146';
-import * as G from './game.js?v=202611080146';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611080146';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611080146';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611080146';
-import { resultsText } from './share.js?v=202611080146';
+import * as T from './time.js?v=202611091521';
+import * as G from './game.js?v=202611091521';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611091521';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611091521';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611091521';
+import { resultsText } from './share.js?v=202611091521';
 
 // ---------------------------------------------------------------------------
 // Small helpers

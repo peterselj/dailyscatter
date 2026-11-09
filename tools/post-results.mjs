@@ -150,6 +150,21 @@ async function main() {
   if (!configured) log('WhatsApp is not connected yet (GREEN_API_* secrets missing), so this is a dry run.');
   else if (!GREEN.chat) log(`${PT ? 'WHATSAPP_TEST_CHAT_ID' : 'WHATSAPP_CHAT_ID'} is missing, so this is a dry run. Run with --list-groups to find it.`);
 
+  // Is the WhatsApp link still up? WhatsApp drops linked devices if the bot's phone
+  // hasn't connected in 14 days. If it's down, don't burn retries on posts that can't
+  // go through; once a day (the run between noon and 12:10pm ET) fail loudly so
+  // GitHub emails the owner.
+  if (configured && !DRY) {
+    const state = (await green('getStateInstance'))?.stateInstance;
+    if (state !== 'authorized') {
+      log(`The WhatsApp link is down (Green API says "${state}"). To fix it: open WhatsApp Business on the bot's phone, then scan the QR code again in the Green API console. Nothing is lost; due posts go out once it's back.`);
+      const et = new Date(NOW).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+      const [h, m] = et.split(':').map(Number);
+      if (h === 12 && m < 10) process.exitCode = 1;
+      return;
+    }
+  }
+
   const family = ((await get(C.family))?.members ?? []).filter((id) => !assisted.has(id));
   const names = Object.fromEntries((await list(C.players)).map(({ id, data }) => [id, data.name || id]));
   const shift = PT ? ((await get('pt_meta/clock'))?.dayShift ?? 0) : 0;

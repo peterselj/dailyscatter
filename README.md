@@ -73,9 +73,12 @@ It sends through [GREEN-API](https://green-api.com), which links a WhatsApp numb
 If the token expires or something breaks, Google emails you about the failed runs.
 
 **Keeping it running:**
-- Open WhatsApp Business on that phone at least every couple of weeks. WhatsApp disconnects linked devices if the phone has been offline for about 14 days.
-- GitHub pauses scheduled jobs in a public repo after 60 days with no commits. If that happens, re-enable the job on the Actions tab.
-- GitHub sometimes runs scheduled jobs a few minutes late.
+- **The bot's phone has to check in with WhatsApp at least every 14 days,** or WhatsApp disconnects Green API. Green API suggests every 10. Automate it with an iPhone Shortcut on the phone that has WhatsApp Business:
+  1. Shortcuts app → **Automation** → **+** → **Time of Day**. Pick a weekly time when the phone is usually unlocked, like Sunday 10am. Choose **Run Immediately**.
+  2. Add the action **Open App** → **WhatsApp Business**. Done.
+- **If the link ever drops anyway,** the job notices on its next run and stops trying to post, so it doesn't use up retries. Once a day (the noon run) it marks itself as failed, so GitHub emails you. To fix it, open WhatsApp Business, go to Linked devices, and remove the old Green API device. Then scan the QR code again in the Green API console. Any due posts go out once it's back.
+- **The GitHub key for the clock expires** on the date you chose when you made it. GitHub emails a reminder beforehand. Make a new one the same way and paste it into the script's `GITHUB_TOKEN` property.
+- GitHub pauses its own backup schedule after 60 days without commits. That doesn't matter, because the Google clock doesn't depend on it.
 
 ## One-time setup (already done unless noted)
 

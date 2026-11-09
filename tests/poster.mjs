@@ -152,15 +152,29 @@ try {
   await job(ET('2026-11-15', '16:20'));
   assert.equal((await sent()).length, 7, 'week message not repeated');
 
-  // Dry run: no WhatsApp settings -> prints, changes nothing.
+  // WhatsApp link dropped (phone offline 14+ days): no post attempts wasted; fails once a day at noon.
   await put('days/2026-11-16', { letter: 'M', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-16', '09:00'), cards: { josh: done('Josh', '2026-11-16', '09:00', 'M') } });
+  await fetch(`${BASE}/__mock/wa-state?s=notAuthorized`);
+  r = await job(ET('2026-11-17', '09:30'));
+  assert.match(r.out, /The WhatsApp link is down \(Green API says "notAuthorized"\)/);
+  assert.equal(r.code, 0, 'not every run fails (no email flood)');
+  assert.equal((await dump())['posts/2026-11-16'], undefined, 'no post attempt recorded, retries not used up');
+  r = await job(ET('2026-11-17', '12:05'));
+  assert.equal(r.code, 1, 'the noon run fails, so GitHub emails the owner once a day');
+  await fetch(`${BASE}/__mock/wa-state?s=authorized`);
+  r = await job(ET('2026-11-17', '12:15'));
+  assert.equal((await dump())['posts/2026-11-16'].fields.status.stringValue, 'sent', 'posts as soon as the link is back');
+  ok('WhatsApp link down: no wasted retries, one failure email a day at noon, posts once it\u2019s fixed');
+
+  // Dry run: no WhatsApp settings -> prints, changes nothing.
+  await put('days/2026-11-17', { letter: 'N', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-17', '09:00'), cards: { josh: done('Josh', '2026-11-17', '09:00', 'N') } });
   const before = JSON.stringify(await dump());
-  r = await job(ET('2026-11-17', '09:30'), { env: {} });
+  r = await job(ET('2026-11-18', '09:30'), { env: {} });
   assert.equal(r.code, 0);
   assert.match(r.out, /WhatsApp is not connected yet/);
-  assert.match(r.out, /----- would post \(2026-11-16\) -----\n🎲 \*Daily Scatter\* · Mon, Nov 16/);
+  assert.match(r.out, /----- would post \(2026-11-17\) -----\n🎲 \*Daily Scatter\* · Tue, Nov 17/);
   assert.equal(JSON.stringify(await dump()), before, 'dry run changes nothing');
-  assert.equal((await sent()).length, 7);
+  assert.equal((await sent()).length, 8);
   assert.ok(!r.out.includes('secret-token'), 'token never printed');
   ok('Not connected yet: dry run prints the message and changes nothing');
 
@@ -178,12 +192,12 @@ try {
   });
   r = await job(ET('2026-11-17', '22:10'), { flags: ['--playtest'] });
   assert.match(r.out, /WHATSAPP_TEST_CHAT_ID is missing, so this is a dry run/);
-  assert.equal((await sent()).length, 7, 'no test chat set: practice results are never sent to the family group');
+  assert.equal((await sent()).length, 8, 'no test chat set: practice results are never sent to the family group');
   r = await job(ET('2026-11-17', '22:10'), { flags: ['--playtest'], env: { ...WA, WHATSAPP_TEST_CHAT_ID: '120363999@g.us' } });
   msgs = await sent();
-  assert.equal(msgs.length, 8, 'playtest posts right away, even at 10pm');
-  assert.equal(msgs[7].chatId, '120363999@g.us', 'to the test chat, not the family group');
-  assert.match(msgs[7].message, /Letter \*C\*\n🎉 Everyone finished!/);
+  assert.equal(msgs.length, 9, 'playtest posts right away, even at 10pm');
+  assert.equal(msgs[8].chatId, '120363999@g.us', 'to the test chat, not the family group');
+  assert.match(msgs[8].message, /Letter \*C\*\n🎉 Everyone finished!/);
   assert.equal((await dump())['pt_posts/2026-11-17'].fields.status.stringValue, 'sent');
   assert.equal((await dump())['posts/2026-11-17'], undefined, 'real markers untouched');
   ok('Playtest mode posts practice results right away, kept separate from the real game');
