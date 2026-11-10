@@ -1,7 +1,7 @@
 // Builds the text for sharing a day's results into a group chat (WhatsApp,
 // iMessage...). WhatsApp formatting: *bold*, ~strikethrough~.
-import { scoreDay } from './scoring.js?v=202611101424';
-import { highlights } from './stats.js?v=202611101424';
+import { scoreDay } from './scoring.js?v=202611101505';
+import { highlights } from './stats.js?v=202611101505';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -41,14 +41,14 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
       const text = clean(a.text);
       if (!text) { out.push(`${name}: —`); continue; }
       let shown = text;
-      if (a.points === 0 && (a.dupe || a.repeatOf !== null || a.override !== null)) shown = `~${text}~`;
+      if (a.points === 0 && (a.dupe || a.tossed || a.repeatOf !== null || a.override !== null)) shown = `~${text}~`;
       else if (a.points === 0 && !a.valid) shown = `${text} ✗`;
       const marks = `${a.override !== null ? ' ⚖️' : ''}${a.flags.length ? ' 🚩' : ''}`;
       out.push(`${name}: ${shown}${a.points ? ` +${a.points}` : ''}${marks}`);
     }
   });
 
-  out.push('', '~crossed out~ = matched someone · ✗ = no word with the letter · 🚩 = flagged · ⚖️ = admin’s call');
+  out.push('', '~crossed out~ = matched someone · ✗ = no word with the letter · 🚩 = challenged · ⚖️ = admin’s call');
   if (weekRows.length) {
     out.push('', `*${weekFinal ? 'Final for the week' : 'Week so far'}:* ${weekRows.map((r) => `${clean(r.name)} ${r.total}`).join(' · ')}`);
   }

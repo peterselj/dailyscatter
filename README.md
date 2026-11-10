@@ -11,7 +11,7 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
   - An answer counts if **any of its main words** starts with the letter, so "Eat Pizza" works for P. Little words like "the", "of" and "and" don't count, so "The Godfather" doesn't work for T. This is friendlier than the official rule, where only the first word counts. If no main word starts with the letter, the answer scores 0.
   - You can't use the **same answer twice** on your own card. The box turns red, the repeat is cleared when you leave it, and a repeat would score 0 anyway.
   - Every other answer scores **1 point per word that starts with the letter**, skipping little words like "of" and "and." So "Mickey Mantle" for M is worth 2.
-- **Reviewing:** anyone can tap an answer to 🚩 **flag** it, or to say it's **the same as** another answer (say, a typo). Only the admin can change scores: nudge any answer's points up or down with − / + (say "To Tell the Truth" deserves 3), or confirm a "same as."
+- **Challenges:** anyone can tap an answer to 🚩 **challenge** it, or to say it's **the same as** another answer (say, a typo). If most of the other players who played that day challenge an answer (and at least two do), it's tossed and scores 0, like the vote in the board game. The admin has the last word: − / + sets any answer's points (say "To Tell the Truth" deserves 3), and "same as" suggestions need the admin's OK. In admin mode, Today lists anything waiting for a decision.
 - **Yesterday tab:** the bottom bar (right to left, so Today sits under your right thumb: Today · Yesterday · This week · Past weeks) has a **Yesterday** tab that opens everyone's answers from yesterday, from anywhere in the app.
 - **Highlights:** each day's results call out the talking points: matching answers ("great minds"), the top-scoring answers, the only person to score in a category, and anyone who scored in all five. They're in the app and in the WhatsApp post.
 - **Streaks:** play on consecutive days and you get a 🔥 streak, shown next to your name. Missing a day resets it.
@@ -98,6 +98,7 @@ If the token expires or something breaks, Google emails you about the failed run
 | Timer length | `TIMER_SECONDS` in `js/config.js` |
 | Who plays with a helper | `ASSISTED_PLAYERS` in `js/config.js` (each one also needs its own page: copy `kenny.html` and change `data-as`) |
 | The categories | `PROMPTS` in `js/prompts.js` |
+| A player's name | ⚙︎ → admin mode → **Rename a player** (their scores and streak stay with them) |
 | A special card for a birthday or holiday | `SPECIAL_CARDS` in `js/prompts.js` (there's an example in the comments) |
 | Which letters can come up | `LETTERS` in `js/prompts.js` |
 | When a day closes and is revealed | `lockTime` in `js/time.js` (midnight Eastern) |
@@ -116,7 +117,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/stats.js` | Highlights, streaks and hall-of-fame records (pure functions, unit tested) |
 | `js/reveal.js` | When results come out (midnight, or once the family is done) and quiet hours for posts |
 | `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
-| `js/prompts.js` | Categories, letters and the daily pick (no repeats within a week) |
+| `js/prompts.js` | Categories, letters and the daily pick (no category repeats for 8 weeks) |
 | `js/db.js`, `js/codec.js` | Tiny Firestore REST client |
 
 **Data:** there is one document per day, `days/YYYY-MM-DD`. It holds the letter, the prompts, each player's card (`cards.<id>`), and the review maps (`flags`, `merges`, `overrides`). Scores are never stored; every phone works them out from the answers, so a change to the scoring rules applies to old days too. `players/<id>` remembers names for the "Who are you?" buttons.

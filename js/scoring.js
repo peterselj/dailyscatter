@@ -15,6 +15,8 @@
 //    "Mickey Mantle" for M = 2.
 //  - Using the same answer twice on your own card only counts the first one;
 //    the repeat scores 0 (the app also stops you from entering it).
+//  - Challenges: anyone can flag an answer. If most of the other players who
+//    played that day flag it (and at least two do), it's tossed: 0 points.
 //  - An admin override sets the points for one answer outright and wins over
 //    everything above.
 
@@ -110,6 +112,8 @@ export function scoreDay(day) {
         override: null,
         points: 0,
         flags: [],
+        tossed: false, // voted out by most of the other players
+        votesNeeded: 0, // flags it takes to toss it (0 = can't be tossed by vote)
         merges: [],
       });
     }
@@ -155,11 +159,20 @@ export function scoreDay(day) {
   for (const m of merges) {
     for (const id of [m.a, m.b]) players[id]?.answers[m.idx]?.merges.push(m);
   }
+  // Challenge votes: a strict majority of the other players, and never fewer than two.
+  for (const id of playing) {
+    const others = playing.filter((x) => x !== id);
+    const needed = others.length >= 2 ? Math.floor(others.length / 2) + 1 : 0;
+    for (const a of players[id].answers) {
+      a.votesNeeded = a.text ? needed : 0;
+      a.tossed = needed > 0 && a.flags.filter((f) => others.includes(f)).length >= needed;
+    }
+  }
 
   for (const id of ids) {
     const p = players[id];
     p.answers.forEach((a, i) => {
-      a.base = p.played && !a.dupe && a.repeatOf === null ? basePoints(a.text, letter) : 0;
+      a.base = p.played && !a.dupe && !a.tossed && a.repeatOf === null ? basePoints(a.text, letter) : 0;
       const o = p.played ? overrides[overrideKey(id, i)] : undefined;
       a.override = o && Number.isFinite(o.points) ? o.points : null;
       a.points = a.override ?? a.base;
@@ -172,6 +185,17 @@ export function scoreDay(day) {
     (players[b].total - players[a].total) ||
     players[a].name.localeCompare(players[b].name));
   return { players, order };
+}
+
+/**
+ * Show each player under their current name (an admin can rename people).
+ * Changes the day in place and returns it.
+ */
+export function applyNames(day, names = {}) {
+  for (const [pid, card] of Object.entries(day?.cards ?? {})) {
+    if (names[pid]) card.name = names[pid];
+  }
+  return day;
 }
 
 /**

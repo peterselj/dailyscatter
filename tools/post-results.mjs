@@ -25,7 +25,7 @@
 import { FIREBASE, ASSISTED_PLAYERS, NUDGE_HOUR } from '../js/config.js';
 import { encFields, decFields } from '../js/codec.js';
 import * as T from '../js/time.js';
-import { scoreDay, scoreWeek } from '../js/scoring.js';
+import { scoreDay, scoreWeek, applyNames } from '../js/scoring.js';
 import { resultsText, weekText, nudgeText } from '../js/share.js';
 import { revealTime, postTime, inQuietHours, stillPlaying, QUIET_START } from '../js/reveal.js';
 
@@ -68,10 +68,12 @@ async function call(method, path, { query = [], body } = {}) {
   return res.json();
 }
 const cache = new Map();
+let renames = {}; // player id -> current name (admin renames)
 async function get(path) {
   if (cache.has(path)) return cache.get(path);
   let data = null;
   try { data = decFields((await call('GET', path)).fields); } catch (e) { if (e.status !== 404) throw e; }
+  if (data?.cards) applyNames(data, renames);
   cache.set(path, data);
   return data;
 }
@@ -167,11 +169,12 @@ async function main() {
 
   const family = ((await get(C.family))?.members ?? []).filter((id) => !assisted.has(id));
   const names = Object.fromEntries((await list(C.players)).map(({ id, data }) => [id, data.name || id]));
+  renames = names;
   const shift = PT ? ((await get('pt_meta/clock'))?.dayShift ?? 0) : 0;
   const today = T.addDays(T.dayId(NOW), shift);
 
   const candidates = PT
-    ? (await list(C.days)).map((d) => { cache.set(`${C.days}/${d.id}`, d.data); return d.id; }).sort()
+    ? (await list(C.days)).map((d) => { cache.set(`${C.days}/${d.id}`, applyNames(d.data, names)); return d.id; }).sort()
     : [T.addDays(today, -2), T.addDays(today, -1), today];
   await nudge({ today, family, names });
 

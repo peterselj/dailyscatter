@@ -128,12 +128,24 @@ export function shuffled(list, seed) {
   return a;
 }
 
-// The 5 prompts for a day. Shuffled per week, so no prompt repeats within a week.
+// The 5 prompts for a day. The whole list is shuffled once per "cycle" of
+// several weeks and dealt out 35 a week, so no prompt repeats within a cycle
+// (8 weeks with ~300 prompts). Weeks before CYCLES_START used a per-week shuffle.
+const CYCLES_START = '2026-11-16'; // a Monday
+const PER_WEEK = 35;
+
 export function promptsFor(dayId, weekId, weekdayIdx) {
   const special = SPECIAL_CARDS[dayId];
   if (special?.prompts?.length === 5) return special.prompts.slice();
-  const deck = shuffled(PROMPTS, `week:${weekId}`);
-  return deck.slice(weekdayIdx * 5, weekdayIdx * 5 + 5);
+  if (weekId < CYCLES_START) {
+    const deck = shuffled(PROMPTS, `week:${weekId}`);
+    return deck.slice(weekdayIdx * 5, weekdayIdx * 5 + 5);
+  }
+  const weekNo = Math.round((Date.parse(`${weekId}T12:00:00Z`) - Date.parse(`${CYCLES_START}T12:00:00Z`)) / (7 * 86400e3));
+  const weeksPerCycle = Math.max(1, Math.floor(PROMPTS.length / PER_WEEK));
+  const deck = shuffled(PROMPTS, `cycle:${Math.floor(weekNo / weeksPerCycle)}`);
+  const start = (weekNo % weeksPerCycle) * PER_WEEK + weekdayIdx * 5;
+  return deck.slice(start, start + 5);
 }
 
 // Pick a random letter that hasn't been used yet this week.
