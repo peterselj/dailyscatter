@@ -1,8 +1,8 @@
 // When a day's results come out, and when it's polite to post them.
 // Pure functions, shared by the app and the WhatsApp posting job, so the two
 // always agree. No DOM, no network.
-import { lockTime, etInstant, dayId as dayIdOf, addDays } from './time.js?v=202611101424';
-import { TIMER_SECONDS } from './config.js?v=202611101424';
+import { lockTime, etInstant, dayId as dayIdOf, addDays } from './time.js?v=202611101641';
+import { TIMER_SECONDS } from './config.js?v=202611101641';
 
 // The moment a timed card is finished: 3 minutes after start, or when the
 // player tapped "I'm done", or the end of the day, whichever comes first.

@@ -1,9 +1,9 @@
 // Run: node --test tests/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey } from '../js/scoring.js';
+import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
 import * as T from '../js/time.js';
-import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
+import { PROMPTS, LETTERS, promptsFor, rollLetter, swapRepeats } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText, nudgeText, weekText } from '../js/share.js';
 import { highlights, streaks, hallOfFame } from '../js/stats.js';
@@ -291,6 +291,65 @@ test('reminder and week messages', () => {
   assert.match(nudgeText({ waiting: ['A', 'B', 'C'], done: 0 }), /A, B and C\nNobody has played yet/);
   const w = weekText({ weekLabel: 'Nov 2 – Nov 8', rows: [{ id: 'z', name: 'Zach', total: 9 }], winners: ['z'], daysPlayed: 7, extras: ['⭐ Best day: 6 points, Zach (Sat)'] });
   assert.match(w, /🥇 Zach 9\n\n⭐ Best day: 6 points, Zach \(Sat\)\n\n7 days played/);
+});
+
+test('challenges: most of the other players (at least two) toss an answer; admin still wins', () => {
+  const cards = {
+    josh: card('Josh', ['Gorilla Glue', '', '', '', '']),
+    zach: card('Zach', ['Grape', '', '', '', '']),
+    aly: card('Aly', ['Guava', '', '', '', '']),
+    sara: card('Sara', ['Gooseberry', '', '', '', '']),
+  };
+  const f = (...by) => Object.fromEntries(by.map((b) => [flagKey('josh', 0, b), { target: 'josh', idx: 0, by: b }]));
+  let a = scoreDay(day(cards, { flags: f('zach') })).players.josh.answers[0];
+  assert.equal(a.votesNeeded, 2);
+  assert.equal(a.tossed, false);
+  assert.equal(a.points, 2, 'one challenge of three others is not enough');
+  a = scoreDay(day(cards, { flags: f('zach', 'aly') })).players.josh.answers[0];
+  assert.equal(a.tossed, true);
+  assert.equal(a.points, 0, 'two of three others toss it');
+  a = scoreDay(day(cards, { flags: f('zach', 'aly'), overrides: { [overrideKey('josh', 0)]: { points: 2 } } })).players.josh.answers[0];
+  assert.equal(a.points, 2, 'the admin can overrule the vote');
+  a = scoreDay(day(cards, { flags: f('josh', 'ghost', 'zach') })).players.josh.answers[0];
+  assert.equal(a.tossed, false, 'your own vote and non-players do not count');
+  const two = { josh: cards.josh, zach: cards.zach };
+  a = scoreDay(day(two, { flags: f('zach') })).players.josh.answers[0];
+  assert.equal(a.votesNeeded, 0);
+  assert.equal(a.tossed, false, 'with one other player, a challenge needs the admin');
+  const txt = resultsText({ day: day(cards, { flags: f('zach', 'aly') }), dayLabel: 'x' });
+  assert.match(txt, /Josh: ~Gorilla Glue~ 🚩/);
+});
+
+test('renames show everywhere, including old days', () => {
+  const d = day({ farm: card('farm', ['Grape', '', '', '', '']), zach: card('Zach', ['Guava', '', '', '', '']) });
+  applyNames(d, { farm: 'Sara' });
+  assert.equal(scoreDay(d).players.farm.name, 'Sara');
+  assert.equal(scoreDay(d).players.zach.name, 'Zach');
+  assert.equal(applyNames(null, { a: 'b' }), null);
+});
+
+test('prompts: no repeats for 8 weeks from the cycle start; older weeks unchanged', () => {
+  const seen = new Set();
+  let n = 0;
+  for (let w = 0; w < 8; w++) {
+    const wid = T.addDays('2026-11-16', w * 7);
+    T.weekDays(wid).forEach((d, i) => promptsFor(d, wid, i).forEach((p) => { seen.add(p); n++; }));
+  }
+  assert.equal(n, 280);
+  assert.equal(seen.size, 280, 'no prompt repeats within the 8-week cycle');
+  const wk9 = T.addDays('2026-11-16', 56);
+  assert.equal(promptsFor(wk9, wk9, 0).length, 5, 'next cycle deals again');
+  assert.deepEqual(promptsFor('2026-11-23', '2026-11-23', 2), promptsFor('2026-11-23', '2026-11-23', 2), 'same for everyone');
+  // If the list is edited mid-week, anything already played this week is swapped out.
+  const today = promptsFor('2026-11-11', '2026-11-09', 2);
+  const fixed = swapRepeats(today, [today[1], today[3], 'A fruit'], '2026-11-11');
+  assert.equal(fixed.length, 5);
+  assert.equal(new Set(fixed).size, 5);
+  assert.ok(!fixed.includes(today[1]) && !fixed.includes(today[3]) && !fixed.includes('A fruit'));
+  assert.equal(fixed[0], today[0]);
+  assert.deepEqual(swapRepeats(today, [today[1]], '2026-11-11'), swapRepeats(today, [today[1]], '2026-11-11'), 'same on every phone');
+  assert.equal(swapRepeats(today, [], 'x'), today);
+  for (const p of PROMPTS) assert.ok(p.length <= 42 && !/[*_~`]/.test(p), `"${p}" is short and plain`);
 });
 
 // --- Time ------------------------------------------------------------------

@@ -428,3 +428,10 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
 .confetti span { position: absolute; top: -40px; animation: fall 2.6s ease-in forwards; }
 @keyframes fall { to { transform: translateY(110vh) rotate(540deg); opacity: .7; } }
+
+/* --- Admin inbox ------------------------------------------------------------ */
+.inbox { border: 1.5px dashed var(--gold); padding: 12px 14px; }
+.inbox .label { color: var(--ink); margin-bottom: 4px; }
+.inbox-row { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); text-decoration: none; font-size: 15px; }
+.inbox-row .when { flex: none; color: var(--muted); font-weight: 700; width: 34px; }
+.inbox-row span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }

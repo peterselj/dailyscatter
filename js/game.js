@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611101424';
-import * as T from './time.js?v=202611101424';
-import { promptsFor, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611101424';
-import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD } from './scoring.js?v=202611101424';
-import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101424';
-import { PLAYTEST } from './mode.js?v=202611101424';
-import { revealTime, stillPlaying } from './reveal.js?v=202611101424';
+import * as db from './db.js?v=202611101641';
+import * as T from './time.js?v=202611101641';
+import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611101641';
+import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD, applyNames } from './scoring.js?v=202611101641';
+import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101641';
+import { PLAYTEST } from './mode.js?v=202611101641';
+import { revealTime, stillPlaying } from './reveal.js?v=202611101641';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
@@ -18,9 +18,17 @@ export const days = {};
 
 const dayPath = (id) => `${DAYS}/${id}`;
 
-export async function loadDay(id) {
-  days[id] = await db.getDoc(dayPath(id));
+// Current display names (player id -> name). An admin can rename people; days
+// are shown with these names whatever name the card was saved under.
+export const names = {};
+
+function keep(id, data) {
+  days[id] = applyNames(data, names);
   return days[id];
+}
+
+export async function loadDay(id) {
+  return keep(id, await db.getDoc(dayPath(id)));
 }
 
 // Loads a week's days up to `upTo`. With `onlyFresh`, days already cached are
@@ -34,12 +42,21 @@ export async function loadWeek(wid, upTo, { onlyFresh } = {}) {
 
 export async function loadAllDays() {
   const list = await db.listDocs(DAYS);
-  for (const { id, data } of list) days[id] = data;
+  for (const { id, data } of list) keep(id, data);
   return list.map((d) => d.id).sort();
 }
 
 export async function listPlayers() {
-  return (await db.listDocs(PLAYERS)).map(({ id, data }) => ({ id, name: data.name || id }));
+  const list = (await db.listDocs(PLAYERS)).map(({ id, data }) => ({ id, name: data.name || id }));
+  for (const p of list) names[p.id] = p.name;
+  for (const d of Object.values(days)) applyNames(d, names);
+  return list;
+}
+
+export async function renamePlayer(id, name) {
+  await db.setDoc(`${PLAYERS}/${id}`, { name }, { mask: ['name'] });
+  names[id] = name;
+  for (const d of Object.values(days)) applyNames(d, names);
 }
 
 export async function savePlayer(id, name) {
@@ -61,17 +78,20 @@ export async function rollDay(today, rollerName) {
   const wid = T.weekId(today);
   await loadWeek(wid, today);
   if (days[today]?.letter) return days[today];
-  const used = T.weekDays(wid).filter((d) => d !== today).map((d) => days[d]?.letter).filter(Boolean);
+  const earlier = T.weekDays(wid).filter((d) => d !== today);
+  const used = earlier.map((d) => days[d]?.letter).filter(Boolean);
   const special = SPECIAL_CARDS[today];
   const data = {
     letter: special?.letter ?? rollLetter(used),
-    prompts: promptsFor(today, wid, T.weekdayIndex(today)),
+    prompts: special?.prompts?.length === 5
+      ? promptsFor(today, wid, T.weekdayIndex(today))
+      : swapRepeats(promptsFor(today, wid, T.weekdayIndex(today)), earlier.flatMap((d) => days[d]?.prompts ?? []), today),
     rolledBy: rollerName,
     rolledAt: Date.now(),
   };
   if (special?.title) data.title = special.title;
   try {
-    days[today] = await db.setDoc(dayPath(today), data, { exists: false });
+    keep(today, await db.setDoc(dayPath(today), data, { exists: false }));
   } catch (e) {
     if (e.status === 0) throw e;
     const d = await loadDay(today); // someone beat us to it
@@ -220,6 +240,5 @@ export async function setOverride(dayId, target, idx, points, by) {
 }
 
 async function writeDay(dayId, data, mask) {
-  days[dayId] = await db.setDoc(dayPath(dayId), data, { mask, exists: true });
-  return days[dayId];
+  return keep(dayId, await db.setDoc(dayPath(dayId), data, { mask, exists: true }));
 }

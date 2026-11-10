@@ -315,7 +315,36 @@ try {
   await shot(zach.page, '10-flag-sheet');
   await zach.page.click('[data-act=close]');
   assert.match(await (await row(zach.page, 'josh', 1)).innerText(), /🚩1/);
-  log('Zach flagged one of Josh’s answers');
+  log('Zach flagged one of Josh\u2019s answers');
+
+  // Family vote: three of Zach's four opponents challenge his 3-pointer -> tossed; one takes it back -> restored.
+  const challenge = async (pl, on) => {
+    await pl.page.clock.setSystemTime(FRI('00:11'));
+    await pl.page.goto('/#/day/2026-11-05');
+    await pl.page.waitForSelector('.day-head');
+    await pl.page.keyboard.press('Escape'); // close any sheet left open
+    await pl.page.click('.ansrow[data-pid="zach"][data-i="4"]');
+    await pl.page.click('[data-act=flag]');
+    await pl.page.waitForSelector(`[data-act=flag][data-on="${on ? 0 : 1}"]`);
+  };
+  await challenge(josh, true);
+  assert.match(await josh.page.innerText('.sheet-card'), /It takes 3 of the other players to toss it/);
+  await challenge(mom, true);
+  await mom.page.click('[data-act=close]');
+  assert.equal(await pts(mom.page, 'zach', 4), '+3', 'two challenges are not enough');
+  await challenge(sara, true);
+  assert.match(await sara.page.innerText('.sheet-card'), /Tossed by family vote/);
+  await sara.page.click('[data-act=close]');
+  assert.equal(await pts(sara.page, 'zach', 4), '0');
+  assert.match(await cls(sara.page, 'zach', 4), /dupe/, 'tossed answers are struck through');
+  await shot(sara.page, '10b-tossed');
+  await challenge(sara, false);
+  await sara.page.click('[data-act=close]');
+  assert.equal(await pts(sara.page, 'zach', 4), '+3', 'taking a challenge back restores it');
+  await challenge(josh, false);
+  await challenge(mom, false);
+  for (const pl of [josh, mom, sara]) await pl.page.keyboard.press('Escape');
+  log('Three of four opponents challenged an answer and it was tossed; taking one back restored it');
 
   // Mom says Zach's "beta" is the same as her "gamma" (pretend it's a typo).
   await mom.page.clock.setSystemTime(FRI('00:12'));
@@ -342,6 +371,12 @@ try {
   await josh.page.fill('[data-form=admin] input', 'Olerud');
   await josh.page.click('[data-form=admin] button');
   await josh.page.waitForSelector('#sheet:not(.open)', { state: 'attached' });
+  await josh.page.goto('/#/');
+  await josh.page.waitForSelector('.inbox');
+  assert.match(await josh.page.innerText('.inbox'), /Admin: 2 to look at[\s\S]*challenged by 1 of 3 needed[\s\S]*Same answer\?/);
+  await shot(josh.page, '10c-admin-inbox');
+  await josh.page.goto('/#/day/2026-11-05');
+  log('Admin\u2019s Today lists what needs a look: one challenge and one "same as" suggestion');
   await josh.page.waitForSelector('.day-head');
   await josh.page.click('.ansrow[data-pid="zach"][data-i="0"]');
   await josh.page.click('[data-act=merge-confirm]');
@@ -435,7 +470,23 @@ try {
   await a.page.click('[data-act=close]');
   await a.page.goto('/');
   await a.page.waitForSelector('[data-act=start]');
-  log('Admin picked the family (Josh, Zach) in Settings');
+  // Zach changes his own name; it shows everywhere, including days played under the old one.
+  assert.equal(await a.page.$('[data-act=rename]'), null, 'nobody can rename someone else');
+  await b.page.click('[data-act=settings]');
+  b.page.once('dialog', (d) => d.accept('josh'));
+  await b.page.click('[data-act=rename-me]');
+  await b.page.waitForSelector('#toast.show:has-text("Someone already goes by josh")');
+  b.page.once('dialog', (d) => d.accept('Zachary'));
+  await b.page.click('[data-act=rename-me]');
+  await b.page.waitForSelector('#toast.show:has-text("You’re now Zachary")');
+  await b.page.waitForSelector('.who:has-text("Zachary")');
+  await a.page.reload();
+  await a.page.goto('/#/week');
+  await a.page.waitForSelector('.board');
+  assert.match(await a.page.innerText('.board'), /Zachary/, 'the new name shows on days played under the old one');
+  await a.page.goto('/#/');
+  await a.page.waitForSelector('[data-act=start]');
+  log('Admin picked the family; Zach changed his own name to Zachary and past days show it');
 
   await Promise.all([a.page.click('[data-act=start]'), b.page.click('[data-act=start]')]);
   await Promise.all([runUntil(a.page, '.play .answers'), runUntil(b.page, '.play .answers')]);

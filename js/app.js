@@ -1,10 +1,10 @@
-import * as T from './time.js?v=202611101424';
-import * as G from './game.js?v=202611101424';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611101424';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101424';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611101424';
-import { resultsText } from './share.js?v=202611101424';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611101424';
+import * as T from './time.js?v=202611101641';
+import * as G from './game.js?v=202611101641';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611101641';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101641';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611101641';
+import { resultsText } from './share.js?v=202611101641';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611101641';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -124,10 +124,12 @@ window.addEventListener('hashchange', () => { document.querySelector('.confetti'
 // ---------------------------------------------------------------------------
 
 let playCleanup = null;
+let namesAt = Date.now(); // names are loaded at startup, then refreshed every few minutes
 
 async function render() {
   if (playCleanup) { playCleanup(); playCleanup = null; }
   try { await Promise.all([PLAYTEST ? G.loadClock() : null, G.loadFamily()]); } catch { /* offline */ }
+  if (S.famOk && Date.now() - namesAt > 5 * 60_000) { namesAt = Date.now(); G.listPlayers().catch(() => {}); }
   S.today = G.todayId();
 
   if (!S.famOk || (!S.me && !AS)) return renderGate();
@@ -152,7 +154,7 @@ async function render() {
 }
 
 function shell(active, body) {
-  const who = AS ? `${esc(helped.name)}’s card` : esc(S.me?.name ?? '');
+  const who = AS ? `${esc(helped.name)}’s card` : esc(G.names[S.me?.id] ?? S.me?.name ?? '');
   const tab = (name, label, icon) =>
     `<a href="#/${name === 'today' ? '' : name}" class="tab ${active === name ? 'on' : ''}"><span class="ti" aria-hidden="true">${icon}</span>${label}</a>`;
   // Today is rightmost, under the right thumb.
@@ -225,12 +227,20 @@ async function submitCode(form) {
   render();
 }
 
-async function choosePlayer(name) {
+// `existingId` is set when tapping a name chip: that player keeps their id (and
+// history) even if an admin has renamed them.
+async function choosePlayer(name, existingId = null) {
   name = name.trim().replace(/\s+/g, ' ');
-  const id = G.playerId(name);
+  let id = existingId || G.playerId(name);
   if (!id) { toast('Please type your first name.'); return; }
+  if (!existingId) {
+    // Typing a name someone already goes by picks that player.
+    const same = Object.entries(G.names).find(([, n]) => n.toLowerCase() === name.toLowerCase());
+    if (same) id = same[0];
+  }
   if (G.assistedById(id)) { toast(`${name} plays from their own page. Ask whoever helps them!`); return; }
-  try { await G.savePlayer(id, name); } catch (e) { fail(e); return; }
+  if (G.names[id]) name = G.names[id];
+  else { try { await G.savePlayer(id, name); G.names[id] = name; } catch (e) { fail(e); return; } }
   S.me = { id, name };
   store.set('ds.me', S.me);
   go('#/');
@@ -278,6 +288,7 @@ async function viewToday() {
   });
 
   html += AS ? assistedCard(day, mainId, mainName, now, lock, true) : myCard(day, now, lock);
+  html += adminInboxCard();
   if (!done) {
     html += yesterdayCard(yid);
     html += helpers.map((h) => h.html).join('');
@@ -466,7 +477,7 @@ function streakBadge(pid, min = 3) {
 }
 
 function nameOf(dayId, id) {
-  return G.days[dayId]?.cards?.[id]?.name || S.names[id] || id;
+  return G.names[id] || G.days[dayId]?.cards?.[id]?.name || id;
 }
 
 function currentWeekScores(wid) {
@@ -801,7 +812,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
   const sections = day.prompts.map((prompt, i) => {
     const rows = playing.map((pid) => {
       const a = players[pid].answers[i];
-      const cls = [a.dupe || a.repeatOf !== null ? 'dupe' : '', a.text && !a.valid ? 'invalid' : '', !a.text ? 'blank' : '', a.override !== null ? 'overridden' : '', a.flags.length ? 'flagged' : ''].join(' ');
+      const cls = [a.dupe || a.repeatOf !== null || (a.tossed && a.override === null) ? 'dupe' : '', a.text && !a.valid ? 'invalid' : '', !a.text ? 'blank' : '', a.override !== null ? 'overridden' : '', a.flags.length ? 'flagged' : ''].join(' ');
       const pending = a.merges.some((m) => !m.confirmed);
       const marks = `${a.flags.length ? `<span class="mk flag">🚩${a.flags.length}</span>` : ''}${pending ? '<span class="mk">≈?</span>' : ''}${a.override !== null ? '<span class="mk adm">set</span>' : ''}`;
       return `<button class="ansrow ${cls}" data-act="answer" data-day="${id}" data-pid="${pid}" data-i="${i}">
@@ -820,7 +831,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
       <div><p class="eyebrow">${day.title ? `✨ ${esc(day.title)} · ` : ''}Rolled by ${esc(day.rolledBy)}</p>${youLine}<ol class="standings">${standings}</ol></div>
     </section>
     ${hlCard}
-    <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
+    <p class="fine">Struck-through answers matched someone else’s. Tap any answer to challenge it${AS ? '' : ' or mark two as the same'}. If most of the other players challenge it, it’s tossed.</p>
     ${sections}
     <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
 }
@@ -868,7 +879,14 @@ function openAnswerSheet(dayId, pid, idx) {
   else if (!a.valid) info.push(`No word starts with ${esc(day.letter)}, so no points.`);
   if (a.repeatOf !== null) info.push(`Struck: ${esc(players[pid].name)} already used this for #${a.repeatOf + 1}.`);
   if (a.dupe) info.push(`Struck: same as ${a.dupeWith.map((x) => esc(nameOf(x))).join(', ')}.`);
-  if (a.flags.length) info.push(`🚩 Flagged by ${a.flags.map((x) => esc(nameOf(x))).join(', ')}.`);
+  if (a.flags.length) {
+    const by = a.flags.map((x) => esc(nameOf(x))).join(', ');
+    info.push(a.tossed
+      ? `🚩 Tossed by family vote: challenged by ${by}.`
+      : `🚩 Challenged by ${by}.${a.votesNeeded ? ` It takes ${a.votesNeeded} of the other players to toss it.` : ''}`);
+  } else if (a.text && a.votesNeeded && !isMine) {
+    info.push(`If ${a.votesNeeded} of the other players challenge this, it’s tossed.`);
+  }
   if (a.override !== null) info.push(`Admin set this to ${a.override} point${a.override === 1 ? '' : 's'} (normally ${a.base}).`);
 
   const merges = a.merges.map((m) => {
@@ -894,7 +912,7 @@ function openAnswerSheet(dayId, pid, idx) {
       <p class="big-pts">${a.points} point${a.points === 1 ? '' : 's'}</p>
       ${info.map((t) => `<p>${t}</p>`).join('')}
       ${merges ? `<ul class="merges">${merges}</ul>` : ''}
-      ${canAct && a.text && !isMine ? `<button class="btn big ${flaggedByMe ? '' : 'warn'}" data-act="flag" data-on="${flaggedByMe ? '0' : '1'}">${flaggedByMe ? 'Remove my flag' : '🚩 Not legit? Flag it'}</button>` : ''}
+      ${canAct && a.text && !isMine ? `<button class="btn big ${flaggedByMe ? '' : 'warn'}" data-act="flag" data-on="${flaggedByMe ? '0' : '1'}">${flaggedByMe ? 'Take back my challenge' : '🚩 Not legit? Challenge it'}</button>` : ''}
       ${canAct && a.text && others ? `<details class="same"><summary>≈ Same as another answer?</summary><p class="fine">Tap the answer that means the same thing. ${S.admin ? '' : 'The admin will confirm.'}</p><div class="chips">${others}</div></details>` : ''}
       ${S.admin && a.text ? `<div class="admin-box">
         <p class="label">Admin: adjust points</p>
@@ -1014,7 +1032,7 @@ async function viewPast() {
 
 async function openSettings() {
   if (S.admin) {
-    try { for (const p of await G.listPlayers()) S.names[p.id] = p.name; } catch { /* offline */ }
+    try { await G.listPlayers(); } catch { /* offline */ }
   }
   const base = appUrl();
   const shortcuts = ASSISTED_PLAYERS.map((p) =>
@@ -1024,7 +1042,9 @@ async function openSettings() {
       <div class="grab"></div>
       <h3>Settings</h3>
       ${AS ? `<p>This is <strong>${esc(helped.name)}’s</strong> page, for whoever is helping ${esc(helped.name)} play.</p>`
-        : `<p>You’re playing as <strong>${esc(S.me.name)}</strong>.</p><button class="btn" data-act="switch">Switch player</button>`}
+        : `<p>You’re playing as <strong>${esc(G.names[S.me.id] ?? S.me.name)}</strong>.</p>
+          <div class="row"><button class="btn" data-act="rename-me">Change my name</button><button class="btn" data-act="switch">Switch player</button></div>
+          <p class="fine">Changing your name keeps your scores and streak.</p>`}
       <hr>
       <p class="label">Add to your Home Screen</p>
       <p class="fine">In Safari, tap the Share button <span aria-hidden="true">⬆︎</span>, then <strong>Add to Home Screen</strong>. It opens like an app.</p>
@@ -1041,8 +1061,41 @@ async function openSettings() {
   sheetEl.classList.add('open');
 }
 
+// Things waiting on the admin: challenged answers that haven't been tossed or
+// ruled on, and "same as" suggestions, from the last two weeks.
+function adminInbox() {
+  const items = [];
+  const since = T.addDays(S.today, -14);
+  for (const id of Object.keys(G.days).sort().reverse()) {
+    const day = G.days[id];
+    if (!day || id < since || !revealed(id)) continue;
+    const { players } = scoreDay(day);
+    for (const [pid, p] of Object.entries(players)) {
+      p.answers.forEach((a, i) => {
+        if (a.flags.length && !a.tossed && a.override === null) {
+          items.push({ id, text: `${p.name}’s “${a.text}” · challenged by ${a.flags.length}${a.votesNeeded ? ` of ${a.votesNeeded} needed` : ''}` });
+        }
+        if (a.merges.some((m) => !m.confirmed && m.a === pid)) {
+          const m = a.merges.find((x) => !x.confirmed && x.a === pid);
+          items.push({ id, text: `Same answer? ${p.name}’s “${a.text}” and ${players[m.b]?.name ?? m.b}’s “${players[m.b]?.answers[i]?.text ?? ''}”` });
+        }
+      });
+    }
+  }
+  return items;
+}
+
+function adminInboxCard() {
+  if (!S.admin) return '';
+  const items = adminInbox();
+  if (!items.length) return '';
+  return `<section class="card inbox"><p class="label">🛎 Admin: ${items.length} to look at</p>
+    ${items.slice(0, 6).map((it) => `<a class="inbox-row" href="#/day/${it.id}"><span class="when">${esc(T.shortWeekday(it.id))}</span><span>${esc(it.text)}</span><span class="chev">›</span></a>`).join('')}
+  </section>`;
+}
+
 function familyEditor() {
-  const people = Object.entries(S.names)
+  const people = Object.entries(G.names)
     .filter(([id]) => !G.assistedById(id))
     .sort((a, b) => a[1].localeCompare(b[1]));
   const boxes = people.map(([id, name]) => `<label class="fam"><input type="checkbox" data-act="family" value="${esc(id)}" ${G.family.includes(id) ? 'checked' : ''}> ${esc(name)}</label>`).join('');
@@ -1069,7 +1122,7 @@ document.addEventListener('click', async (e) => {
   }
   switch (act) {
     case 'reload': render(); break;
-    case 'pick': choosePlayer(el.dataset.name); break;
+    case 'pick': choosePlayer(el.dataset.name, el.dataset.id); break;
     case 'start': go('#/play'); break;
     case 'resume': go('#/play'); break;
     case 'done-early': playActions.doneEarly?.(el); break;
@@ -1094,6 +1147,24 @@ document.addEventListener('click', async (e) => {
     case 'family': {
       const ids = [...document.querySelectorAll('input[data-act=family]:checked')].map((x) => x.value);
       try { await G.saveFamily(ids); toast(ids.length ? `Family set: ${ids.length} people.` : 'Family cleared: results wait for midnight.'); } catch (err) { fail(err); }
+      break;
+    }
+    case 'rename-me': {
+      const old = G.names[S.me.id] ?? S.me.name;
+      const next = (prompt('What should we call you?', old) ?? '').trim().replace(/\s+/g, ' ').slice(0, 20);
+      if (!next || next === old) break;
+      try {
+        await G.listPlayers(); // fresh names, so two people can't take the same one
+        const taken = Object.entries(G.names).some(([id, n]) => id !== S.me.id && n.toLowerCase() === next.toLowerCase());
+        const helper = ASSISTED_PLAYERS.some((p) => p.name.toLowerCase() === next.toLowerCase());
+        if (taken || helper) { toast(`Someone already goes by ${next}.`); break; }
+        await G.renamePlayer(S.me.id, next);
+        S.me.name = next;
+        store.set('ds.me', S.me);
+        toast(`You’re now ${next}.`);
+      } catch (err) { fail(err); }
+      closeSheet();
+      render();
       break;
     }
     case 'admin-off':
@@ -1161,7 +1232,7 @@ setInterval(() => {
     const pids = [S.me?.id, ...ASSISTED_PLAYERS.map((p) => p.id)].filter(Boolean);
     try {
       const [, , players] = await Promise.all([G.loadClock(), G.loadFamily(), G.listPlayers()]);
-      for (const p of players) S.names[p.id] = p.name;
+      void players;
       S.today = G.todayId();
       await G.loadDay(S.today);
       await Promise.all(pids.map((pid) => syncBackup(S.today, pid)));

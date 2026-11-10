@@ -1,8 +1,8 @@
 // Fun facts worked out from the answers: daily highlights, play streaks and
 // all-time records. Pure functions (no DOM, no network), unit-tested, and
 // shared by the app and the WhatsApp posting job.
-import { scoreDay, scoreWeek, hasPlayed } from './scoring.js?v=202611101424';
-import { addDays, weekId } from './time.js?v=202611101424';
+import { scoreDay, scoreWeek, hasPlayed } from './scoring.js?v=202611101641';
+import { addDays, weekId } from './time.js?v=202611101641';
 
 const list = (names) => (names.length < 3 ? names.join(' & ') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`);
 
