@@ -1,10 +1,10 @@
-import * as T from './time.js?v=202611101505';
-import * as G from './game.js?v=202611101505';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611101505';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101505';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611101505';
-import { resultsText } from './share.js?v=202611101505';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611101505';
+import * as T from './time.js?v=202611101641';
+import * as G from './game.js?v=202611101641';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611101641';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101641';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611101641';
+import { resultsText } from './share.js?v=202611101641';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611101641';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -124,10 +124,12 @@ window.addEventListener('hashchange', () => { document.querySelector('.confetti'
 // ---------------------------------------------------------------------------
 
 let playCleanup = null;
+let namesAt = Date.now(); // names are loaded at startup, then refreshed every few minutes
 
 async function render() {
   if (playCleanup) { playCleanup(); playCleanup = null; }
   try { await Promise.all([PLAYTEST ? G.loadClock() : null, G.loadFamily()]); } catch { /* offline */ }
+  if (S.famOk && Date.now() - namesAt > 5 * 60_000) { namesAt = Date.now(); G.listPlayers().catch(() => {}); }
   S.today = G.todayId();
 
   if (!S.famOk || (!S.me && !AS)) return renderGate();
@@ -1040,7 +1042,9 @@ async function openSettings() {
       <div class="grab"></div>
       <h3>Settings</h3>
       ${AS ? `<p>This is <strong>${esc(helped.name)}’s</strong> page, for whoever is helping ${esc(helped.name)} play.</p>`
-        : `<p>You’re playing as <strong>${esc(S.me.name)}</strong>.</p><button class="btn" data-act="switch">Switch player</button>`}
+        : `<p>You’re playing as <strong>${esc(G.names[S.me.id] ?? S.me.name)}</strong>.</p>
+          <div class="row"><button class="btn" data-act="rename-me">Change my name</button><button class="btn" data-act="switch">Switch player</button></div>
+          <p class="fine">Changing your name keeps your scores and streak.</p>`}
       <hr>
       <p class="label">Add to your Home Screen</p>
       <p class="fine">In Safari, tap the Share button <span aria-hidden="true">⬆︎</span>, then <strong>Add to Home Screen</strong>. It opens like an app.</p>
@@ -1099,11 +1103,6 @@ function familyEditor() {
     <p class="label">Family: who counts toward “everyone’s done”</p>
     <p class="fine">When all the checked people have finished, the day’s results come out early (and get posted to WhatsApp). Kenny is always optional. Leave everyone unchecked to wait for midnight.</p>
     <div class="fam-list">${boxes || '<p class="fine">Nobody has joined yet.</p>'}</div>
-  </div>
-  <div class="admin-box">
-    <p class="label">Rename a player</p>
-    <p class="fine">Changes how their name shows everywhere, including past days. Their scores and streak stay with them.</p>
-    <div class="chips">${people.map(([id, name]) => `<button class="chip" data-act="rename" data-id="${esc(id)}" data-name="${esc(name)}">${esc(name)} ✎</button>`).join('')}</div>
   </div>`;
 }
 
@@ -1150,16 +1149,22 @@ document.addEventListener('click', async (e) => {
       try { await G.saveFamily(ids); toast(ids.length ? `Family set: ${ids.length} people.` : 'Family cleared: results wait for midnight.'); } catch (err) { fail(err); }
       break;
     }
-    case 'rename': {
-      const next = (prompt(`New name for ${el.dataset.name}:`, el.dataset.name) ?? '').trim().replace(/\s+/g, ' ').slice(0, 20);
-      if (!next || next === el.dataset.name) break;
+    case 'rename-me': {
+      const old = G.names[S.me.id] ?? S.me.name;
+      const next = (prompt('What should we call you?', old) ?? '').trim().replace(/\s+/g, ' ').slice(0, 20);
+      if (!next || next === old) break;
       try {
-        await G.renamePlayer(el.dataset.id, next);
-        if (S.me?.id === el.dataset.id) { S.me.name = next; store.set('ds.me', S.me); }
-        toast(`${el.dataset.name} is now ${next}.`);
+        await G.listPlayers(); // fresh names, so two people can't take the same one
+        const taken = Object.entries(G.names).some(([id, n]) => id !== S.me.id && n.toLowerCase() === next.toLowerCase());
+        const helper = ASSISTED_PLAYERS.some((p) => p.name.toLowerCase() === next.toLowerCase());
+        if (taken || helper) { toast(`Someone already goes by ${next}.`); break; }
+        await G.renamePlayer(S.me.id, next);
+        S.me.name = next;
+        store.set('ds.me', S.me);
+        toast(`You’re now ${next}.`);
       } catch (err) { fail(err); }
-      await render();
-      openSettings();
+      closeSheet();
+      render();
       break;
     }
     case 'admin-off':

@@ -98,7 +98,7 @@ If the token expires or something breaks, Google emails you about the failed run
 | Timer length | `TIMER_SECONDS` in `js/config.js` |
 | Who plays with a helper | `ASSISTED_PLAYERS` in `js/config.js` (each one also needs its own page: copy `kenny.html` and change `data-as`) |
 | The categories | `PROMPTS` in `js/prompts.js` |
-| A player's name | ⚙︎ → admin mode → **Rename a player** (their scores and streak stay with them) |
+| Your own name | ⚙︎ → **Change my name** (your scores and streak stay with you) |
 | A special card for a birthday or holiday | `SPECIAL_CARDS` in `js/prompts.js` (there's an example in the comments) |
 | Which letters can come up | `LETTERS` in `js/prompts.js` |
 | When a day closes and is revealed | `lockTime` in `js/time.js` (midnight Eastern) |
@@ -117,7 +117,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/stats.js` | Highlights, streaks and hall-of-fame records (pure functions, unit tested) |
 | `js/reveal.js` | When results come out (midnight, or once the family is done) and quiet hours for posts |
 | `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
-| `js/prompts.js` | Categories, letters and the daily pick (no category repeats for 8 weeks) |
+| `js/prompts.js` | Categories, letters and the daily pick (no category repeats for about 9 weeks) |
 | `js/db.js`, `js/codec.js` | Tiny Firestore REST client |
 
 **Data:** there is one document per day, `days/YYYY-MM-DD`. It holds the letter, the prompts, each player's card (`cards.<id>`), and the review maps (`flags`, `merges`, `overrides`). Scores are never stored; every phone works them out from the answers, so a change to the scoring rules applies to old days too. `players/<id>` remembers names for the "Who are you?" buttons.

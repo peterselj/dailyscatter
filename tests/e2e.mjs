@@ -466,20 +466,27 @@ try {
   await a.page.waitForSelector('#toast.show:has-text("Family set: 1")');
   await a.page.check('input[data-act=family][value=zach]');
   await a.page.waitForSelector('#toast.show:has-text("Family set: 2")');
-  a.page.once('dialog', (d) => d.accept('Zachary'));
-  await a.page.click('[data-act=rename][data-id=zach]');
-  await a.page.waitForSelector('#toast.show:has-text("Zach is now Zachary")');
-  await a.page.waitForSelector('.sheet-card.settings');
   await shot(a.page, '13z-family-settings');
   await a.page.click('[data-act=close]');
   await a.page.goto('/');
   await a.page.waitForSelector('[data-act=start]');
+  // Zach changes his own name; it shows everywhere, including days played under the old one.
+  assert.equal(await a.page.$('[data-act=rename]'), null, 'nobody can rename someone else');
+  await b.page.click('[data-act=settings]');
+  b.page.once('dialog', (d) => d.accept('josh'));
+  await b.page.click('[data-act=rename-me]');
+  await b.page.waitForSelector('#toast.show:has-text("Someone already goes by josh")');
+  b.page.once('dialog', (d) => d.accept('Zachary'));
+  await b.page.click('[data-act=rename-me]');
+  await b.page.waitForSelector('#toast.show:has-text("You’re now Zachary")');
+  await b.page.waitForSelector('.who:has-text("Zachary")');
+  await a.page.reload();
   await a.page.goto('/#/week');
   await a.page.waitForSelector('.board');
   assert.match(await a.page.innerText('.board'), /Zachary/, 'the new name shows on days played under the old one');
   await a.page.goto('/#/');
   await a.page.waitForSelector('[data-act=start]');
-  log('Admin picked the family (Josh, Zach) and renamed Zach to Zachary; past days show the new name');
+  log('Admin picked the family; Zach changed his own name to Zachary and past days show it');
 
   await Promise.all([a.page.click('[data-act=start]'), b.page.click('[data-act=start]')]);
   await Promise.all([runUntil(a.page, '.play .answers'), runUntil(b.page, '.play .answers')]);

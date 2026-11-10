@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
 import * as T from '../js/time.js';
-import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
+import { PROMPTS, LETTERS, promptsFor, rollLetter, swapRepeats } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText, nudgeText, weekText } from '../js/share.js';
 import { highlights, streaks, hallOfFame } from '../js/stats.js';
@@ -340,6 +340,16 @@ test('prompts: no repeats for 8 weeks from the cycle start; older weeks unchange
   const wk9 = T.addDays('2026-11-16', 56);
   assert.equal(promptsFor(wk9, wk9, 0).length, 5, 'next cycle deals again');
   assert.deepEqual(promptsFor('2026-11-23', '2026-11-23', 2), promptsFor('2026-11-23', '2026-11-23', 2), 'same for everyone');
+  // If the list is edited mid-week, anything already played this week is swapped out.
+  const today = promptsFor('2026-11-11', '2026-11-09', 2);
+  const fixed = swapRepeats(today, [today[1], today[3], 'A fruit'], '2026-11-11');
+  assert.equal(fixed.length, 5);
+  assert.equal(new Set(fixed).size, 5);
+  assert.ok(!fixed.includes(today[1]) && !fixed.includes(today[3]) && !fixed.includes('A fruit'));
+  assert.equal(fixed[0], today[0]);
+  assert.deepEqual(swapRepeats(today, [today[1]], '2026-11-11'), swapRepeats(today, [today[1]], '2026-11-11'), 'same on every phone');
+  assert.equal(swapRepeats(today, [], 'x'), today);
+  for (const p of PROMPTS) assert.ok(p.length <= 42 && !/[*_~`]/.test(p), `"${p}" is short and plain`);
 });
 
 // --- Time ------------------------------------------------------------------
