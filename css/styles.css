@@ -415,3 +415,16 @@ body.kb .kb-spacer { display: block; height: 60vh; }
 .fam-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 12px; }
 .fam { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 36px; }
 .fam input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* --- Streaks, highlights, hall of fame, confetti ---------------------------- */
+.streak { font-weight: 800; color: var(--warn); white-space: nowrap; text-transform: none; letter-spacing: 0; }
+.streak-line { font-weight: 700; color: var(--warn) !important; margin-top: 6px; }
+.hl ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hl li { display: flex; gap: 10px; align-items: baseline; line-height: 1.35; }
+.hl .hi { flex: none; }
+.date.sub { font-size: 20px; margin-top: 20px; }
+.board.fame td, .board.fame th { padding: 10px 4px; }
+.board.fame td:last-child, .board.fame th:last-child { padding-right: 12px; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
+.confetti span { position: absolute; top: -40px; animation: fall 2.6s ease-in forwards; }
+@keyframes fall { to { transform: translateY(110vh) rotate(540deg); opacity: .7; } }

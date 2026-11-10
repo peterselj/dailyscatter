@@ -62,7 +62,7 @@ const problems = [];
 const layout = (page) => page.evaluate(() => {
   const vw = innerWidth;
   const offside = [...document.querySelectorAll('body *')]
-    .filter((el) => { const r = el.getBoundingClientRect(); return r.width && (r.right > vw + 1 || r.left < -1); })
+    .filter((el) => { const r = el.getBoundingClientRect(); return !el.closest('.confetti') && r.width && (r.right > vw + 1 || r.left < -1); })
     .map((el) => `<${el.tagName.toLowerCase()} class="${el.className}">`).slice(0, 3);
   const tabs = [...document.querySelectorAll('.tabs .tab')].map((t) => t.getBoundingClientRect().height);
   return { sideScroll: document.documentElement.scrollWidth > vw, offside, tabWrap: tabs.length > 0 && Math.max(...tabs) > 50 };
@@ -131,6 +131,18 @@ for (const [label, device] of PHONES) {
   if (!kb.timer) fail('play + keyboard: timer is off screen');
   if (!kb.category) fail('play + keyboard: the current category is hidden under the header');
   if (!kb.box) fail('play + keyboard: the answer box is under the keyboard');
+  // Finish the card: two days in a row should show a streak on Today.
+  await p.setViewportSize({ width, height });
+  await p.evaluate(() => document.body.classList.remove('kb'));
+  await p.click('[data-act=done-early]');
+  await p.click('[data-act=done-early]');
+  await p.waitForSelector('.play.over');
+  await p.click('text=Done');
+  await p.waitForSelector('.locked-in');
+  for (let i = 0; i < 20 && !(await p.$('.locked-in .streak')); i++) await p.waitForTimeout(100);
+  const streak = await p.$('.locked-in .streak');
+  if (!streak || !/2-day streak/.test(await streak.innerText())) fail('today: no "2-day streak" after playing two days running');
+  await check('today-after');
   if (errors.length) fail(`page errors: ${errors.join('; ')}`);
   console.log(`  ${problems.some((x) => x.startsWith(label)) ? '✗' : '✓'} ${label} (${width}x${height})`);
   await ctx.close();

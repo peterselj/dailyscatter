@@ -202,6 +202,30 @@ try {
   assert.equal((await dump())['posts/2026-11-17'], undefined, 'real markers untouched');
   ok('Playtest mode posts practice results right away, kept separate from the real game');
 
+  // Evening reminder: 6pm, someone still to play -> one nudge; never twice; none once everyone's done.
+  await put('days/2026-11-18', { letter: 'D', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-18', '09:00'), cards: { josh: done('Josh', '2026-11-18', '09:00', 'D') } });
+  await job(ET('2026-11-18', '17:45')); // clears anything else that was due
+  let before6 = (await sent()).length;
+  r = await job(ET('2026-11-18', '17:55'));
+  assert.equal((await sent()).length, before6, 'no reminder before 6pm');
+  r = await job(ET('2026-11-18', '18:05'));
+  msgs = await sent();
+  assert.equal(msgs.length, before6 + 1);
+  assert.equal(msgs.at(-1).message.split('\n')[0], '⏳ *Daily Scatter* · still to play today: Z and Aly');
+  assert.match(msgs.at(-1).message, /\n1 is in\. Results come out the moment everyone’s done, or at midnight\./);
+  assert.ok(!msgs.at(-1).message.includes('D1Josh'), 'a reminder never reveals answers');
+  await job(ET('2026-11-18', '18:15'));
+  assert.equal((await sent()).length, before6 + 1, 'only one reminder a day');
+  await put('days/2026-11-19', { letter: 'H', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-19', '09:00'),
+    cards: { josh: done('Josh', '2026-11-19', '09:00', 'H'), z: done('Z', '2026-11-19', '10:00', 'H'), aly: done('Aly', '2026-11-19', '11:00', 'H') } });
+  await job(ET('2026-11-19', '11:10')); // posts the 18th (9am slot, late) and the 19th's early results
+  const n19 = (await sent()).length;
+  await job(ET('2026-11-19', '18:05'));
+  assert.equal((await sent()).length, n19, 'no reminder when everyone has played');
+  await job(ET('2026-11-20', '21:05'));
+  assert.equal((await sent()).filter((m) => /still to play/.test(m.message)).length, 1, 'no reminder during quiet hours');
+  ok('Evening reminder: one at 6pm naming who’s left, none if everyone’s done or it’s late');
+
   console.log('\nAll posting checks passed.');
 } catch (e) {
   console.error('\nFAILED:', e.message);

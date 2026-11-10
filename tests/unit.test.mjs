@@ -5,7 +5,8 @@ import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, override
 import * as T from '../js/time.js';
 import { PROMPTS, LETTERS, promptsFor, rollLetter } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
-import { resultsText } from '../js/share.js';
+import { resultsText, nudgeText, weekText } from '../js/share.js';
+import { highlights, streaks, hallOfFame } from '../js/stats.js';
 import { cardEnd, everyoneDoneAt, revealTime, stillPlaying, postTime, inQuietHours } from '../js/reveal.js';
 
 // --- Scoring -------------------------------------------------------------
@@ -223,6 +224,73 @@ test('group-chat posts wait out quiet hours (9pm to 9am Eastern), across dayligh
   assert.equal(inQuietHours(Date.parse('2026-11-08T08:59:00-05:00')), true);
   assert.equal(inQuietHours(Date.parse('2026-11-08T09:00:00-05:00')), false);
   assert.equal(inQuietHours(Date.parse('2026-11-08T20:59:00-05:00')), false);
+});
+
+test('highlights: great minds, answer of the day, lone scorer, clean sweep', () => {
+  const d = day({
+    josh: card('Josh', ['Grapes', 'Goat', 'Gone Girl', 'Geneva', 'Gus']),
+    zach: card('Zach', ['grapes', 'Giant Gorilla', 'Gladiator', '', 'Gary']),
+    aly: card('Aly', ['Grapes!', 'Gecko', 'Apollo 13', '', 'Gina']),
+  });
+  const hl = highlights(d, 10);
+  const texts = hl.map((h) => `${h.icon} ${h.text}`);
+  assert.ok(texts.includes('🧠 Great minds: everyone said “Grapes” for A fruit'), texts.join('\n'));
+  assert.ok(texts.includes('🔥 Answers of the day (+2): Josh’s “Gone Girl” · Zach’s “Giant Gorilla”'), texts.join('\n'));
+  assert.ok(texts.includes('🎯 Only Josh scored on A city, with “Geneva”'), texts.join('\n'));
+  assert.equal(texts.filter((t) => t.startsWith('💯')).length, 0, 'nobody scored in all 5 (the fruit matched)');
+  assert.deepEqual(highlights(day({ josh: card('Josh', ['Grapes', '', '', '', '']) })), [], 'no highlights for a solo day');
+  assert.ok(highlights(d).length <= 4);
+  const txt = resultsText({ day: d, dayLabel: 'Thu, Nov 5' });
+  assert.match(txt, /\n\n🧠 Great minds: everyone said “Grapes” for A fruit\n/);
+});
+
+test('streaks: consecutive days, still alive until today ends, best ever', () => {
+  const played = (...ids) => ({ cards: Object.fromEntries(ids.map((id) => [id, { name: id, startedAt: 1 }])) });
+  const days = {
+    '2026-11-02': played('josh', 'zach'),
+    '2026-11-03': played('josh', 'zach'),
+    '2026-11-04': played('josh'),
+    '2026-11-05': null,
+    '2026-11-06': played('josh', 'zach'),
+    '2026-11-07': played('josh', 'zach', 'aly'),
+    '2026-11-08': { cards: { josh: { name: 'josh', startedAt: 1 }, kenny: { name: 'Kenny', skipped: true } } },
+  };
+  const st = streaks(days, '2026-11-08');
+  assert.deepEqual(st.josh, { current: 3, best: 3, playedToday: true });
+  assert.deepEqual(st.zach, { current: 2, best: 2, playedToday: false }, 'has not played today yet: streak still stands');
+  assert.deepEqual(st.aly, { current: 1, best: 1, playedToday: false });
+  assert.equal(st.kenny, undefined, 'sitting out is not playing');
+  assert.equal(streaks(days, '2026-11-09').zach.current, 0, 'missed a whole day: streak over');
+  assert.equal(streaks(days, '2026-11-09').josh.current, 3);
+  assert.equal(streaks(days, '2026-11-04').josh.current, 3);
+});
+
+test('hall of fame: weeks won skip the current week; days won, best and average', () => {
+  const c = (answers) => card('x', answers);
+  const g = (n) => Array.from({ length: 5 }, (_, i) => (i < n ? `G${i}unique${Math.random()}` : ''));
+  const mk = (scores) => day(Object.fromEntries(Object.entries(scores).map(([id, n]) => [id, { ...c(g(n)), name: id }])));
+  const days = {
+    '2026-11-02': mk({ josh: 3, zach: 2 }),
+    '2026-11-03': mk({ josh: 1, zach: 4 }),
+    '2026-11-09': mk({ josh: 5, zach: 1 }), // current week
+  };
+  const rows = hallOfFame(days, '2026-11-09');
+  const zach = rows.find((r) => r.id === 'zach'), josh = rows.find((r) => r.id === 'josh');
+  assert.equal(zach.weeksWon, 1);
+  assert.equal(josh.weeksWon, 0, 'the unfinished week does not count');
+  assert.equal(josh.daysWon, 2);
+  assert.equal(josh.bestDay, 5);
+  assert.equal(josh.average, 3);
+  assert.equal(zach.average, 2.3);
+  assert.equal(rows[0].id, 'zach');
+});
+
+test('reminder and week messages', () => {
+  assert.equal(nudgeText({ waiting: ['Emily', 'Dilan'], done: 5, url: 'https://x/' }),
+    '⏳ *Daily Scatter* · still to play today: Emily and Dilan\n5 are in. Results come out the moment everyone’s done, or at midnight.\nhttps://x/');
+  assert.match(nudgeText({ waiting: ['A', 'B', 'C'], done: 0 }), /A, B and C\nNobody has played yet/);
+  const w = weekText({ weekLabel: 'Nov 2 – Nov 8', rows: [{ id: 'z', name: 'Zach', total: 9 }], winners: ['z'], daysPlayed: 7, extras: ['⭐ Best day: 6 points, Zach (Sat)'] });
+  assert.match(w, /🥇 Zach 9\n\n⭐ Best day: 6 points, Zach \(Sat\)\n\n7 days played/);
 });
 
 // --- Time ------------------------------------------------------------------

@@ -1,9 +1,10 @@
-import * as T from './time.js?v=202611091521';
-import * as G from './game.js?v=202611091521';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611091521';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611091521';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611091521';
-import { resultsText } from './share.js?v=202611091521';
+import * as T from './time.js?v=202611101424';
+import * as G from './game.js?v=202611101424';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611101424';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611101424';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611101424';
+import { resultsText } from './share.js?v=202611101424';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611101424';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -116,7 +117,7 @@ function go(hash) {
   if (location.hash === hash) render(); else location.hash = hash;
 }
 
-window.addEventListener('hashchange', () => { closeSheet(); applyUpdate(); render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { document.querySelector('.confetti')?.remove(); closeSheet(); applyUpdate(); render(); window.scrollTo(0, 0); });
 
 // ---------------------------------------------------------------------------
 // Render
@@ -143,6 +144,7 @@ async function render() {
     if (route().name !== r.name || route().arg !== r.arg) return; // navigated away meanwhile
     app.innerHTML = shell(r.name, html);
     S.loaded = true;
+    if (pendingCelebration) { store.set(pendingCelebration, true); pendingCelebration = null; celebrate(); }
   } catch (e) {
     console.error(e);
     app.innerHTML = shell(r.name, `<div class="card empty"><p>${esc(errorMessage(e))}</p><button class="btn" data-act="reload">Try again</button></div>`);
@@ -294,6 +296,9 @@ async function viewToday() {
 
 function myCard(day, now, lock) {
   const card = day?.cards?.[S.me.id];
+  const st = streakOf(S.me.id);
+  const keep = st && st.current >= 2 && !st.playedToday
+    ? `<p class="streak-line">🔥 ${st.current}-day streak. Play today to keep it going!</p>` : '';
   const left = lock - now;
   const short = left < TIMER_SECONDS * 1000 ? `<p class="warn">Heads up: only ${esc(T.timerLabel(left))} left before today’s card closes at midnight.</p>` : '';
   if (!day) {
@@ -301,7 +306,7 @@ function myCard(day, now, lock) {
       <p class="eyebrow">You’re first today!</p>
       <h3>Roll today’s letter</h3>
       <p>You’ll roll the letter for everyone, then your 3-minute timer starts right away.</p>
-      ${short}
+      ${short}${keep}
       <button class="btn primary big" data-act="start">🎲 Roll &amp; start</button>
     </section>`;
   }
@@ -310,7 +315,7 @@ function myCard(day, now, lock) {
       <p class="eyebrow">Letter rolled by ${esc(day.rolledBy)} at ${esc(T.clockLabel(day.rolledAt))}</p>
       <h3>Ready when you are</h3>
       <p>5 categories, one secret letter, 3 minutes. The letter stays hidden until you hit start.</p>
-      ${short}
+      ${short}${keep}
       <button class="btn primary big" data-act="start">Start my card</button>
     </section>`;
   }
@@ -322,7 +327,7 @@ function myCard(day, now, lock) {
     </section>`;
   }
   return `<section class="card locked-in">
-    <p class="eyebrow ok">✓ Locked in for today</p>
+    <p class="eyebrow ok">✓ Locked in for today${st && st.current >= 2 ? ` <span class="streak">· 🔥 ${st.current}-day streak</span>` : ''}</p>
     <details><summary>Your answers</summary>${answerList(day, card)}</details>
   </section>`;
 }
@@ -366,10 +371,10 @@ function assistedCard(day, pid, name, now, lock, isMain) {
 function whoPlayed(day, now) {
   const cards = Object.entries(day?.cards ?? {});
   if (!cards.length) return '';
-  const chips = cards.sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([, c]) => {
+  const chips = cards.sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([pid, c]) => {
     const allIn = c.assisted && (c.answers ?? []).filter((a) => String(a).trim()).length === 5;
     const icon = c.skipped ? '😴' : G.cardOpen(c, S.today, now) && !allIn ? '⏳' : '✓';
-    return `<span class="chip">${icon} ${esc(c.name)}</span>`;
+    return `<span class="chip">${icon} ${esc(c.name)}${streakBadge(pid)}</span>`;
   }).join('');
   return `<section class="card"><p class="label">Played so far</p><div class="chips">${chips}</div></section>`;
 }
@@ -415,7 +420,7 @@ function weekStandings(placeholder = false) {
     return `<a class="card teaser" href="#/week/${pw}"><span>New week!</span><strong>Last week: 🏆 ${champs} · ${last.rows[0].total}</strong><span class="chev">›</span></a>`;
   }
   const me = AS || S.me?.id;
-  const list = rows.map((r) => `<li class="${r.id === me ? 'me' : ''}"><span class="rank">${winners.includes(r.id) ? '👑' : ''}</span><span class="nm">${esc(r.name)}</span><span class="pts">${r.total}</span></li>`).join('');
+  const list = rows.map((r) => `<li class="${r.id === me ? 'me' : ''}"><span class="rank">${winners.includes(r.id) ? '👑' : ''}</span><span class="nm">${esc(r.name)}${streakBadge(r.id)}</span><span class="pts">${r.total}</span></li>`).join('');
   return `<section class="card week-mini">
     <div class="wm-head"><p class="label">This week so far</p><a href="#/week" class="wm-link">Full week ›</a></div>
     <ol class="standings">${list}</ol>
@@ -441,6 +446,23 @@ function revealPhrase(dayId, now = Date.now()) {
   const left = esc(T.durationLabel(T.lockTime(dayId) - now));
   if (names) return `Results come out as soon as everyone’s done (waiting on ${names}), or at midnight · in ${left}.`;
   return `Today’s card is open until midnight. Everyone’s answers are revealed then · in ${left}.`;
+}
+
+// Every past day is loaded once per session (for streaks and the hall of fame).
+let historyLoaded = false;
+async function loadHistory() {
+  if (historyLoaded) return;
+  await G.loadAllDays();
+  historyLoaded = true;
+}
+
+function streakOf(pid) {
+  return historyLoaded ? streaks(G.days, S.today)[pid] ?? null : null;
+}
+
+function streakBadge(pid, min = 3) {
+  const st = streakOf(pid);
+  return st && st.current >= min ? ` <span class="streak" title="${st.current}-day streak">🔥${st.current}</span>` : '';
 }
 
 function nameOf(dayId, id) {
@@ -718,6 +740,26 @@ const playActions = { doneEarly: null, assistDone: null };
 
 // --- Day results ----------------------------------------------------------
 
+let pendingCelebration = null;
+
+function celebrate() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const box = document.createElement('div');
+  box.className = 'confetti';
+  box.setAttribute('aria-hidden', 'true');
+  const bits = ['🎉', '⭐', '🏆', '✨', '🎊'];
+  for (let i = 0; i < 28; i++) {
+    const b = document.createElement('span');
+    b.textContent = bits[i % bits.length];
+    b.style.left = `${Math.random() * 88}%`;
+    b.style.animationDelay = `${Math.random() * 0.9}s`;
+    b.style.fontSize = `${18 + Math.random() * 16}px`;
+    box.appendChild(b);
+  }
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 3600);
+}
+
 async function viewYesterday() {
   return viewDay(T.addDays(S.today, -1), { heading: 'Yesterday' });
 }
@@ -746,6 +788,16 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
     <li class="${pid === meId ? 'me' : ''}"><span class="rank">${rankLabel(playing, players, i)}</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">${players[pid].total}</span></li>`).join('')
     + sitting.map((pid) => `<li class="out"><span class="rank">😴</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">–</span></li>`).join('');
 
+  const hl = highlights(day);
+  const hlCard = hl.length
+    ? `<section class="card hl"><p class="label">Highlights</p><ul>${hl.map((h) => `<li><span class="hi" aria-hidden="true">${h.icon}</span><span>${esc(h.text)}</span></li>`).join('')}</ul></section>`
+    : '';
+  // You won the day: a little confetti, the first time you see it.
+  const topScore = players[playing[0]].total;
+  if (!AS && meRank >= 0 && playing.length > 1 && topScore > 0 && players[meId].total === topScore && store.get(`ds.won.${PLAYTEST ? 'pt.' : ''}${id}`) !== true) {
+    pendingCelebration = `ds.won.${PLAYTEST ? 'pt.' : ''}${id}`;
+  }
+
   const sections = day.prompts.map((prompt, i) => {
     const rows = playing.map((pid) => {
       const a = players[pid].answers[i];
@@ -767,6 +819,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
       <div class="letter-tile">${esc(day.letter)}</div>
       <div><p class="eyebrow">${day.title ? `✨ ${esc(day.title)} · ` : ''}Rolled by ${esc(day.rolledBy)}</p>${youLine}<ol class="standings">${standings}</ol></div>
     </section>
+    ${hlCard}
     <p class="fine">Struck-through answers matched someone else’s. Tap any answer to flag it${AS ? '' : ' or mark two as the same'}.</p>
     ${sections}
     <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
@@ -945,7 +998,16 @@ async function viewPast() {
     return `<a class="dayrow" href="#/week/${w}"><span class="dl">Week of ${esc(T.monthDay(w))}</span>
       <span class="st">${champ ? `🏆 ${champ} · ${rows[0].total}` : 'No winner'}</span></a>`;
   }).join('');
-  return `<h2 class="date">Past weeks</h2>${list ? `<section class="card flush days">${list}</section>` : '<div class="card empty"><p>No past weeks yet. Check back next Monday!</p></div>'}`;
+  historyLoaded = true;
+  const revealedDays = Object.fromEntries(ids.filter((id) => revealed(id)).map((id) => [id, G.days[id]]));
+  const fame = hallOfFame(revealedDays, current);
+  const st = streaks(G.days, S.today);
+  const fameCard = fame.length ? `<section class="card flush"><table class="board fame">
+      <thead><tr><th></th><th title="Weeks won">🏆</th><th title="Days won">🥇</th><th title="Best day">Best</th><th title="Average per day">Avg</th><th title="Longest streak">🔥</th></tr></thead>
+      <tbody>${fame.map((r) => `<tr class="${r.id === S.me?.id ? 'me' : ''}"><td class="nm">${esc(r.name)}</td><td>${r.weeksWon}</td><td>${r.daysWon}</td><td>${r.bestDay}</td><td>${r.average.toFixed(1)}</td><td>${st[r.id]?.best ?? 0}</td></tr>`).join('')}</tbody>
+    </table></section>
+    <p class="fine">🏆 weeks won · 🥇 days won · best day · average per day · 🔥 longest streak</p>` : '';
+  return `<h2 class="date">Hall of fame</h2>${fameCard}<h2 class="date sub">Past weeks</h2>${list ? `<section class="card flush days">${list}</section>` : '<div class="card empty"><p>No past weeks yet. Check back next Monday!</p></div>'}`;
 }
 
 // --- Settings sheet ---------------------------------------------------------
@@ -1107,4 +1169,5 @@ setInterval(() => {
   }
   render();
   checkForUpdate();
+  if (S.famOk) loadHistory().then(() => maybeRefresh(true)).catch(() => {});
 })();

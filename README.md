@@ -13,6 +13,10 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
   - Every other answer scores **1 point per word that starts with the letter**, skipping little words like "of" and "and." So "Mickey Mantle" for M is worth 2.
 - **Reviewing:** anyone can tap an answer to 🚩 **flag** it, or to say it's **the same as** another answer (say, a typo). Only the admin can change scores: nudge any answer's points up or down with − / + (say "To Tell the Truth" deserves 3), or confirm a "same as."
 - **Yesterday tab:** the bottom bar (right to left, so Today sits under your right thumb: Today · Yesterday · This week · Past weeks) has a **Yesterday** tab that opens everyone's answers from yesterday, from anywhere in the app.
+- **Highlights:** each day's results call out the talking points: matching answers ("great minds"), the top-scoring answers, the only person to score in a category, and anyone who scored in all five. They're in the app and in the WhatsApp post.
+- **Streaks:** play on consecutive days and you get a 🔥 streak, shown next to your name. Missing a day resets it.
+- **Hall of fame:** the Past weeks tab starts with all-time records: weeks won, days won, best day, average and longest streak.
+- **Evening reminder:** at 6pm Eastern, if the day's results aren't out yet, the WhatsApp bot posts who still hasn't played. It never posts more than one a day. Change the hour, or turn it off, with `NUDGE_HOUR` in `js/config.js`.
 - **Weekly:** weeks run Monday to Sunday. Scores reset every Monday, and past weeks (with winners) stay under **Past weeks**.
 - **Sharing:** **Share** (at the bottom of any day's results, and the **Share** button next to "Your score yesterday" on Today) opens the iPhone share sheet with the whole day ready to paste into WhatsApp: the standings, every player's answer to every category (matches ~crossed out~, answers with no word starting with the letter marked ✗, admin calls marked ⚖️), and the week so far. If a phone can't open the share sheet, it copies the text instead.
 
@@ -109,6 +113,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/app.js` | Screens, routing, the timer and Kenny mode |
 | `js/game.js` | Reading and writing game data |
 | `js/scoring.js` | All scoring rules (pure functions, unit tested) |
+| `js/stats.js` | Highlights, streaks and hall-of-fame records (pure functions, unit tested) |
 | `js/reveal.js` | When results come out (midnight, or once the family is done) and quiet hours for posts |
 | `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
 | `js/prompts.js` | Categories, letters and the daily pick (no repeats within a week) |

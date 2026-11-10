@@ -15,6 +15,10 @@ export const ADMIN_CODE_SHA256 = 'da42c6b9fc4b4a38df0eea4f67374bfb0c89732ccc9578
 // Seconds on the clock once you hit Start.
 export const TIMER_SECONDS = 180;
 
+// The WhatsApp bot posts a "still to play" reminder at this hour (Eastern,
+// 24-hour clock) if the day's results aren't out yet. Set to null for no reminders.
+export const NUDGE_HOUR = 18;
+
 // Players who play with a helper: no timer, one big prompt at a time, a
 // "Not today" button, and answers that save so the card can be finished later.
 // Each one gets its own page for a home-screen shortcut (e.g. kenny.html).
