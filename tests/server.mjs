@@ -13,7 +13,8 @@ let docs = new Map();
 let fakeVersion = null; // tests: pretend a newer release is live
 // Fake GREEN-API (WhatsApp) for testing the posting job.
 let sent = [];
-let failSends = 0; // "days/2026-11-05" -> { fields, createTime, updateTime }
+let failSends = 0;
+let waState = 'authorized'; // "days/2026-11-05" -> { fields, createTime, updateTime }
 export const stats = { writes: 0, reads: 0 };
 
 const err = (res, code, status, message) => send(res, code, { error: { code, status, message } });
@@ -112,9 +113,10 @@ export function createServer() {
     const url = new URL(req.url, 'http://localhost');
     let body = '';
     for await (const chunk of req) body += chunk;
-    if (url.pathname === '/__mock/reset') { docs = new Map(); sent = []; failSends = 0; stats.writes = stats.reads = 0; return send(res, 200, {}); }
+    if (url.pathname === '/__mock/reset') { docs = new Map(); sent = []; failSends = 0; waState = 'authorized'; stats.writes = stats.reads = 0; return send(res, 200, {}); }
     if (url.pathname === '/__mock/sent') return send(res, 200, sent);
     if (url.pathname === '/__mock/fail-send') { failSends = Number(url.searchParams.get('n') || 0); return send(res, 200, {}); }
+    if (url.pathname === '/__mock/wa-state') { waState = url.searchParams.get('s') || 'authorized'; return send(res, 200, {}); }
     if (url.pathname.startsWith('/green/')) {
       if (/\/sendMessage\//.test(url.pathname)) {
         if (failSends > 0) { failSends--; return send(res, 500, { message: 'pretend WhatsApp is down' }); }
@@ -122,6 +124,7 @@ export function createServer() {
         sent.push({ chatId, message });
         return send(res, 200, { idMessage: `MSG${sent.length}` });
       }
+      if (/\/getStateInstance\//.test(url.pathname)) return send(res, 200, { stateInstance: waState });
       if (/\/getChats\//.test(url.pathname)) return send(res, 200, [{ id: '120363000000000000@g.us', name: 'Petersel Family' }, { id: '15555550123@c.us', name: 'Someone' }]);
       return send(res, 404, {});
     }

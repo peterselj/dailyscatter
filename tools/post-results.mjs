@@ -22,12 +22,12 @@
 //   --playtest     use the playtest data (pt_*), ignore quiet hours, and post to
 //                  WHATSAPP_TEST_CHAT_ID (dry run if that isn't set)
 //   --list-groups  print the WhatsApp groups the linked number is in, with their ids
-import { FIREBASE, ASSISTED_PLAYERS } from '../js/config.js';
+import { FIREBASE, ASSISTED_PLAYERS, NUDGE_HOUR } from '../js/config.js';
 import { encFields, decFields } from '../js/codec.js';
 import * as T from '../js/time.js';
 import { scoreDay, scoreWeek } from '../js/scoring.js';
-import { resultsText, weekText } from '../js/share.js';
-import { revealTime, postTime, inQuietHours } from '../js/reveal.js';
+import { resultsText, weekText, nudgeText } from '../js/share.js';
+import { revealTime, postTime, inQuietHours, stillPlaying, QUIET_START } from '../js/reveal.js';
 
 const args = new Set(process.argv.slice(2));
 const PT = args.has('--playtest');
@@ -150,6 +150,21 @@ async function main() {
   if (!configured) log('WhatsApp is not connected yet (GREEN_API_* secrets missing), so this is a dry run.');
   else if (!GREEN.chat) log(`${PT ? 'WHATSAPP_TEST_CHAT_ID' : 'WHATSAPP_CHAT_ID'} is missing, so this is a dry run. Run with --list-groups to find it.`);
 
+  // Is the WhatsApp link still up? WhatsApp drops linked devices if the bot's phone
+  // hasn't connected in 14 days. If it's down, don't burn retries on posts that can't
+  // go through; once a day (the run between noon and 12:10pm ET) fail loudly so
+  // GitHub emails the owner.
+  if (configured && !DRY) {
+    const state = (await green('getStateInstance'))?.stateInstance;
+    if (state !== 'authorized') {
+      log(`The WhatsApp link is down (Green API says "${state}"). To fix it: open WhatsApp Business on the bot's phone, then scan the QR code again in the Green API console. Nothing is lost; due posts go out once it's back.`);
+      const et = new Date(NOW).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+      const [h, m] = et.split(':').map(Number);
+      if (h === 12 && m < 10) process.exitCode = 1;
+      return;
+    }
+  }
+
   const family = ((await get(C.family))?.members ?? []).filter((id) => !assisted.has(id));
   const names = Object.fromEntries((await list(C.players)).map(({ id, data }) => [id, data.name || id]));
   const shift = PT ? ((await get('pt_meta/clock'))?.dayShift ?? 0) : 0;
@@ -158,6 +173,7 @@ async function main() {
   const candidates = PT
     ? (await list(C.days)).map((d) => { cache.set(`${C.days}/${d.id}`, d.data); return d.id; }).sort()
     : [T.addDays(today, -2), T.addDays(today, -1), today];
+  await nudge({ today, family, names });
 
   const baseLock = (id, day) => (PT ? (id < today ? -Infinity : day?.revealedAt ?? Infinity) : T.lockTime(id));
   const revealedAt = async (id) => {
@@ -194,13 +210,36 @@ async function main() {
     log(`${id}: ${await postOnce(id, text)}`);
 
     if (isSunday && week.rows.length) {
+      const played = weekDays.filter((d) => d.day);
+      const extras = [];
+      const bestDay = Math.max(0, ...week.rows.flatMap((r) => Object.values(r.perDay).filter(Number.isFinite)));
+      if (bestDay > 0) {
+        const who = week.rows.flatMap((r) => Object.entries(r.perDay).filter(([, v]) => v === bestDay).map(([d]) => `${r.name} (${T.shortWeekday(d)})`));
+        extras.push(`⭐ Best day: ${bestDay} points, ${who.slice(0, 3).join(', ')}`);
+      }
+      const perfect = week.rows.filter((r) => played.length >= 3 && played.every((d) => Number.isFinite(r.perDay[d.id]))).map((r) => r.name);
+      if (perfect.length) extras.push(`🔥 Played every day: ${perfect.join(', ')}`);
       const weekMsg = weekText({
         weekLabel: `${T.monthDay(wid)} – ${T.monthDay(T.addDays(wid, 6))}`,
-        rows: week.rows, winners: week.winners, daysPlayed: weekDays.filter((d) => d.day).length, url: APP_URL,
+        rows: week.rows, winners: week.winners, daysPlayed: played.length, extras, url: APP_URL,
       });
       log(`week of ${wid}: ${await postOnce(`week-${wid}`, weekMsg)}`);
     }
   }
+}
+
+// The evening reminder: once a day, between NUDGE_HOUR and quiet hours, if the
+// family is set, results aren't out, and someone still hasn't played.
+async function nudge({ today, family, names }) {
+  if (PT || NUDGE_HOUR === null || !family.length) return;
+  const from = T.etInstant(today, NUDGE_HOUR);
+  if (NOW < from || NOW >= T.etInstant(today, QUIET_START)) return;
+  const day = await get(`${C.days}/${today}`);
+  if (NOW >= revealTime(day, today, family, T.lockTime(today))) return;
+  const waiting = stillPlaying(day, today, family, NOW);
+  if (!waiting.length) return;
+  const text = nudgeText({ waiting: waiting.map((p) => names[p] || p), done: family.length - waiting.length, url: APP_URL });
+  log(`reminder for ${today}: ${await postOnce(`nudge-${today}`, text)}`);
 }
 
 main().catch((e) => {

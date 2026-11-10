@@ -13,6 +13,10 @@ A daily family category game, built for iPhones. It lives at **https://peterselj
   - Every other answer scores **1 point per word that starts with the letter**, skipping little words like "of" and "and." So "Mickey Mantle" for M is worth 2.
 - **Reviewing:** anyone can tap an answer to 🚩 **flag** it, or to say it's **the same as** another answer (say, a typo). Only the admin can change scores: nudge any answer's points up or down with − / + (say "To Tell the Truth" deserves 3), or confirm a "same as."
 - **Yesterday tab:** the bottom bar (right to left, so Today sits under your right thumb: Today · Yesterday · This week · Past weeks) has a **Yesterday** tab that opens everyone's answers from yesterday, from anywhere in the app.
+- **Highlights:** each day's results call out the talking points: matching answers ("great minds"), the top-scoring answers, the only person to score in a category, and anyone who scored in all five. They're in the app and in the WhatsApp post.
+- **Streaks:** play on consecutive days and you get a 🔥 streak, shown next to your name. Missing a day resets it.
+- **Hall of fame:** the Past weeks tab starts with all-time records: weeks won, days won, best day, average and longest streak.
+- **Evening reminder:** at 6pm Eastern, if the day's results aren't out yet, the WhatsApp bot posts who still hasn't played. It never posts more than one a day. Change the hour, or turn it off, with `NUDGE_HOUR` in `js/config.js`.
 - **Weekly:** weeks run Monday to Sunday. Scores reset every Monday, and past weeks (with winners) stay under **Past weeks**.
 - **Sharing:** **Share** (at the bottom of any day's results, and the **Share** button next to "Your score yesterday" on Today) opens the iPhone share sheet with the whole day ready to paste into WhatsApp: the standings, every player's answer to every category (matches ~crossed out~, answers with no word starting with the letter marked ✗, admin calls marked ⚖️), and the week so far. If a phone can't open the share sheet, it copies the text instead.
 
@@ -73,9 +77,12 @@ It sends through [GREEN-API](https://green-api.com), which links a WhatsApp numb
 If the token expires or something breaks, Google emails you about the failed runs.
 
 **Keeping it running:**
-- Open WhatsApp Business on that phone at least every couple of weeks. WhatsApp disconnects linked devices if the phone has been offline for about 14 days.
-- GitHub pauses scheduled jobs in a public repo after 60 days with no commits. If that happens, re-enable the job on the Actions tab.
-- GitHub sometimes runs scheduled jobs a few minutes late.
+- **The bot's phone has to check in with WhatsApp at least every 14 days,** or WhatsApp disconnects Green API. Green API suggests every 10. Automate it with an iPhone Shortcut on the phone that has WhatsApp Business:
+  1. Shortcuts app → **Automation** → **+** → **Time of Day**. Pick a weekly time when the phone is usually unlocked, like Sunday 10am. Choose **Run Immediately**.
+  2. Add the action **Open App** → **WhatsApp Business**. Done.
+- **If the link ever drops anyway,** the job notices on its next run and stops trying to post, so it doesn't use up retries. Once a day (the noon run) it marks itself as failed, so GitHub emails you. To fix it, open WhatsApp Business, go to Linked devices, and remove the old Green API device. Then scan the QR code again in the Green API console. Any due posts go out once it's back.
+- **The GitHub key for the clock expires** on the date you chose when you made it. GitHub emails a reminder beforehand. Make a new one the same way and paste it into the script's `GITHUB_TOKEN` property.
+- GitHub pauses its own backup schedule after 60 days without commits. That doesn't matter, because the Google clock doesn't depend on it.
 
 ## One-time setup (already done unless noted)
 
@@ -106,6 +113,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 | `js/app.js` | Screens, routing, the timer and Kenny mode |
 | `js/game.js` | Reading and writing game data |
 | `js/scoring.js` | All scoring rules (pure functions, unit tested) |
+| `js/stats.js` | Highlights, streaks and hall-of-fame records (pure functions, unit tested) |
 | `js/reveal.js` | When results come out (midnight, or once the family is done) and quiet hours for posts |
 | `js/time.js` | Eastern-time days, the midnight close and Monday weeks, with DST handled |
 | `js/prompts.js` | Categories, letters and the daily pick (no repeats within a week) |

@@ -1,6 +1,7 @@
 // Builds the text for sharing a day's results into a group chat (WhatsApp,
 // iMessage...). WhatsApp formatting: *bold*, ~strikethrough~.
-import { scoreDay } from './scoring.js?v=202611080146';
+import { scoreDay } from './scoring.js?v=202611101424';
+import { highlights } from './stats.js?v=202611101424';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -29,6 +30,8 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
   for (const p of playing) out.push(`${MEDALS[rank(p)] ?? `${rank(p) + 1}.`} ${clean(players[p].name)} ${players[p].total}`);
   const sitting = order.filter((p) => !players[p].played).map((p) => clean(players[p].name));
   if (sitting.length) out.push(`😴 ${sitting.join(', ')} sat out`);
+  const hl = highlights(day);
+  if (hl.length) out.push('', ...hl.map((h) => `${h.icon} ${clean(h.text)}`));
 
   day.prompts.forEach((prompt, i) => {
     out.push('', `*${i + 1}. ${clean(prompt)}*`);
@@ -60,9 +63,10 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
  * @param {Array}  o.rows       scoreWeek(...).rows
  * @param {string[]} o.winners  scoreWeek(...).winners
  * @param {number} o.daysPlayed how many days had a game
+ * @param {string[]} [o.extras] extra lines, e.g. "⭐ Best day: Josh, 6 on Sat"
  * @param {string} [o.url]
  */
-export function weekText({ weekLabel, rows, winners, daysPlayed, url = '' }) {
+export function weekText({ weekLabel, rows, winners, daysPlayed, extras = [], url = '' }) {
   const champs = rows.filter((r) => winners.includes(r.id)).map((r) => clean(r.name));
   const out = [`🏆 *Daily Scatter · Week of ${weekLabel}*`, ''];
   if (champs.length) out.push(`${champs.join(' & ')} ${champs.length > 1 ? 'tie' : 'wins'} the week with ${rows[0].total} points!`, '');
@@ -70,7 +74,26 @@ export function weekText({ weekLabel, rows, winners, daysPlayed, url = '' }) {
     const rank = rows.findIndex((x) => x.total === r.total);
     out.push(`${MEDALS[rank] ?? `${rank + 1}.`} ${clean(r.name)} ${r.total}`);
   });
+  if (extras.length) out.push('', ...extras.map(clean));
   out.push('', `${daysPlayed} day${daysPlayed === 1 ? '' : 's'} played. New week, fresh scores. Good luck!`);
+  if (url) out.push(url);
+  return out.join('\n');
+}
+
+/**
+ * The evening reminder: who still hasn't played today.
+ * @param {object} o
+ * @param {string[]} o.waiting  names of family members still to play
+ * @param {number} o.done       how many family members have finished
+ * @param {string} [o.url]
+ */
+export function nudgeText({ waiting, done, url = '' }) {
+  const names = waiting.map(clean);
+  const who = names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  const out = [`⏳ *Daily Scatter* · still to play today: ${who}`];
+  out.push(done
+    ? `${done} ${done === 1 ? 'is' : 'are'} in. Results come out the moment everyone’s done, or at midnight.`
+    : 'Nobody has played yet. Today’s card closes at midnight.');
   if (url) out.push(url);
   return out.join('\n');
 }
