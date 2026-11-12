@@ -124,7 +124,7 @@ export function createServer() {
         sent.push({ chatId, message });
         return send(res, 200, { idMessage: `MSG${sent.length}` });
       }
-      if (/\/getStateInstance\//.test(url.pathname)) return send(res, 200, { stateInstance: waState });
+      if (/\/getStateInstance\//.test(url.pathname)) return waState === 'glitch' ? send(res, 404, {}) : send(res, 200, { stateInstance: waState });
       if (/\/getChats\//.test(url.pathname)) return send(res, 200, [{ id: '120363000000000000@g.us', name: 'Petersel Family' }, { id: '15555550123@c.us', name: 'Someone' }]);
       return send(res, 404, {});
     }

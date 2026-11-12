@@ -166,6 +166,16 @@ try {
   assert.equal((await dump())['posts/2026-11-16'].fields.status.stringValue, 'sent', 'posts as soon as the link is back');
   ok('WhatsApp link down: no wasted retries, one failure email a day at noon, posts once it\u2019s fixed');
 
+  // Green API hiccup on the link check (404 for a moment): the run doesn't fail, even at noon.
+  await fetch(`${BASE}/__mock/wa-state?s=glitch`);
+  r = await job(ET('2026-11-17', '12:25'));
+  assert.equal(r.code, 0, 'a flaky status check is not a failure');
+  assert.match(r.out, /Couldn't check the WhatsApp link just now/);
+  r = await job(ET('2026-11-17', '12:05'));
+  assert.equal(r.code, 0);
+  await fetch(`${BASE}/__mock/wa-state?s=authorized`);
+  ok('A momentary Green API error on the link check does not fail the run');
+
   // Dry run: no WhatsApp settings -> prints, changes nothing.
   await put('days/2026-11-17', { letter: 'N', prompts, rolledBy: 'Josh', rolledAt: ET('2026-11-17', '09:00'), cards: { josh: done('Josh', '2026-11-17', '09:00', 'N') } });
   const before = JSON.stringify(await dump());
