@@ -9,7 +9,21 @@
 function pokeDailyScatter() {
   const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
   if (!token) throw new Error('Add a Script Property named GITHUB_TOKEN first.');
-  const res = UrlFetchApp.fetch(
+  // GitHub sometimes answers with a server error for a moment; try a few times
+  // before giving up, so one hiccup doesn't send a failure email.
+  let res;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    res = poke(token);
+    if (res.getResponseCode() < 500) break;
+    Utilities.sleep(5000 * attempt);
+  }
+  if (res.getResponseCode() !== 204) {
+    throw new Error('GitHub said ' + res.getResponseCode() + ': ' + res.getContentText());
+  }
+}
+
+function poke(token) {
+  return UrlFetchApp.fetch(
     'https://api.github.com/repos/peterselj/dailyscatter/actions/workflows/post-results.yml/dispatches',
     {
       method: 'post',
@@ -19,7 +33,4 @@ function pokeDailyScatter() {
       muteHttpExceptions: true,
     },
   );
-  if (res.getResponseCode() !== 204) {
-    throw new Error('GitHub said ' + res.getResponseCode() + ': ' + res.getContentText());
-  }
 }

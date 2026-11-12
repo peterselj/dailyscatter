@@ -157,8 +157,12 @@ async function main() {
   // go through; once a day (the run between noon and 12:10pm ET) fail loudly so
   // GitHub emails the owner.
   if (configured && !DRY) {
-    const state = (await green('getStateInstance'))?.stateInstance;
-    if (state !== 'authorized') {
+    // Only a clear "not authorized" answer counts. If Green API itself hiccups
+    // (it sometimes answers 404 or 5xx for a moment), carry on: a real problem
+    // will show up when a post is tried, and that is retried on the next run.
+    let state = 'unknown';
+    try { state = (await green('getStateInstance'))?.stateInstance ?? 'unknown'; } catch (e) { log(`Couldn't check the WhatsApp link just now (${e.message.trim()}); carrying on.`); }
+    if (['notAuthorized', 'blocked', 'yellowCard'].includes(state)) {
       log(`The WhatsApp link is down (Green API says "${state}"). To fix it: open WhatsApp Business on the bot's phone, then scan the QR code again in the Green API console. Nothing is lost; due posts go out once it's back.`);
       const et = new Date(NOW).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
       const [h, m] = et.split(':').map(Number);
