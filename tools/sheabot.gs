@@ -308,7 +308,10 @@ function sheabotTest() {
   lap('Key works. Flash models on offer: ' + (flash.join(', ') || '(none)'));
 
   var msg = { from: 'Josh', text: 'Sheabot, is "fruit salad" a legit answer for "a sandwich" starting with F?', quoted: '' };
-  var models = [props.GEMINI_MODEL || 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+  // Lighter and older models first: they tend to answer fastest on the free tier.
+  // The newest one goes last, since it can take minutes. Press Stop once you've seen enough.
+  var models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.5-flash', props.GEMINI_MODEL || 'gemini-flash-latest']
+    .filter(function (m, i, all) { return all.indexOf(m) === i; });
   models.forEach(function (model, i) {
     lap('Step 3 of 3 (' + (i + 1) + '/' + models.length + '): asking ' + model + ' for a ruling...');
     var started = Date.now();
@@ -322,7 +325,7 @@ function sheabotTest() {
       lap(model + ' failed: ' + err.message);
     }
   });
-  lap('Done. Sheabot uses the first model unless you set a Script Property GEMINI_MODEL to another one.');
+  lap('Done. Sheabot uses ' + (props.GEMINI_MODEL || 'gemini-flash-latest') + ' unless you set a Script Property GEMINI_MODEL to another one.');
 }
 
 // 2. Tells GREEN-API to forward the group's messages to this script. Run once, after deploying the web app.
