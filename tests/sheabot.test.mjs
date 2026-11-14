@@ -161,6 +161,17 @@ test('still rules if the game data can\'t be loaded, and honors the family\'s st
   assert.match(w.calls.gemini[0].system, /Extra instructions from the family: Be extra tough on Josh\./);
 });
 
+test('sheabotTest logs each step and Sheabot\'s answer', () => {
+  const w = world({ docs: DOCS });
+  const lines = [];
+  w.sandbox.console.log = (x) => lines.push(x);
+  w.sandbox.sheabotTest();
+  assert.match(lines[0], /AI key found \(7 characters\)/);
+  assert.ok(lines.some((l) => /Flash models on offer: gemini-9-flash, gemini-9-flash-image/.test(l)));
+  assert.match(lines.at(-1), /Sheabot says: ✅ Legit/);
+  assert.equal(w.calls.sent.length, 0, 'the test never posts to WhatsApp');
+});
+
 test('sheabotConnect points GREEN-API at the web app; sheabotDisconnect turns it off', () => {
   const w = world();
   w.sandbox.sheabotConnect();

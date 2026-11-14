@@ -272,11 +272,36 @@ function sheaSend_(props, message, replyToId) {
 
 // --- Run these by hand from the editor ------------------------------------------------------
 
-// 1. Checks the AI key and the game data, without touching WhatsApp. See the log for Sheabot's answer.
+// 1. Checks the AI key and the game data, without touching WhatsApp. Logs each
+// step as it goes, so if something is slow or stuck you can see which one.
 function sheabotTest() {
   var props = sheaProps_();
+  var t0 = Date.now();
+  var lap = function (label) { console.log('[' + ((Date.now() - t0) / 1000).toFixed(1) + 's] ' + label); };
+  lap('Starting. AI key ' + (props.GEMINI_API_KEY ? 'found (' + props.GEMINI_API_KEY.length + ' characters).' : 'MISSING: add a Script Property named GEMINI_API_KEY.'));
+  if (!props.GEMINI_API_KEY) return;
+
+  lap('Step 1 of 3: reading the game results...');
+  var context = sheaGameContext_(Date.now());
+  lap('Got them: ' + context.split('\n').length + ' lines.');
+
+  lap('Step 2 of 3: asking Google which AI models this key can use...');
+  var list = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    headers: { 'x-goog-api-key': props.GEMINI_API_KEY }, muteHttpExceptions: true,
+  });
+  if (list.getResponseCode() !== 200) {
+    lap('Google refused the key (' + list.getResponseCode() + '): ' + list.getContentText().slice(0, 300));
+    return;
+  }
+  var flash = (JSON.parse(list.getContentText()).models || []).map(function (m) { return m.name.replace('models/', ''); })
+    .filter(function (n) { return /flash/.test(n); });
+  lap('Key works. Flash models on offer: ' + (flash.join(', ') || '(none)'));
+
+  var model = props.GEMINI_MODEL || 'gemini-flash-latest';
+  lap('Step 3 of 3: asking ' + model + ' for a ruling (usually under 15 seconds)...');
   var msg = { from: 'Josh', text: 'Sheabot, is "fruit salad" a legit answer for "a sandwich" starting with F?', quoted: '' };
-  console.log(sheaAsk_(props, sheaSystem_(props), sheaQuestion_(msg, sheaGameContext_(Date.now()))));
+  var answer = sheaAsk_(props, sheaSystem_(props), sheaQuestion_(msg, context));
+  lap('Sheabot says: ' + answer);
 }
 
 // 2. Tells GREEN-API to forward the group's messages to this script. Run once, after deploying the web app.
