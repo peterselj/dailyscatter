@@ -19,7 +19,7 @@
 //   WHATSAPP_CHAT_ID    the Daily Scatter group's id (ends in @g.us)
 //   WEBHOOK_KEY         any long random word; keeps strangers from calling this
 //   WEBAPP_URL          this script's web app URL (ends in /exec), set after deploying
-// Optional: GEMINI_MODEL (default gemini-flash-latest), SHEABOT_STYLE (extra
+// Optional: GEMINI_MODEL (default gemini-flash-lite-latest), SHEABOT_STYLE (extra
 // instructions for how Sheabot talks and rules).
 
 var SHEA = {
@@ -27,6 +27,9 @@ var SHEA = {
   FIRESTORE: 'https://firestore.googleapis.com/v1/projects/dailyscatter-f0771/databases/(default)/documents',
   FIREBASE_KEY: 'AIzaSyADhD0m-hUkUMq-sLAPYaMdhB8Jx8ZRDAo', // public by design, same as the app
   TIMER_MS: 180000,
+  // The "lite" model answers in about 2 seconds on the free tier; the full Flash
+  // model took over 2 minutes when tried, with rulings that were no better.
+  MODEL: 'gemini-flash-lite-latest',
   MAX_PER_HOUR: 30, // keeps a runaway chat from using up the free AI allowance
   HELPERS: ['kenny'], // optional players: they never hold up the day's results
 };
@@ -217,7 +220,7 @@ function sheaValue_(v) {
 
 function sheaAsk_(props, system, question) {
   if (!props.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
-  var model = props.GEMINI_MODEL || 'gemini-flash-latest';
+  var model = props.GEMINI_MODEL || SHEA.MODEL;
   // Ask for quick answers ("low" thinking): a ruling doesn't need deep thought, and
   // full thinking can take minutes. Models that don't know the setting get asked without it.
   var res = sheaGemini_(props, model, system, question, true);
@@ -307,25 +310,12 @@ function sheabotTest() {
     .filter(function (n) { return /flash/.test(n); });
   lap('Key works. Flash models on offer: ' + (flash.join(', ') || '(none)'));
 
+  var model = props.GEMINI_MODEL || SHEA.MODEL;
+  lap('Step 3 of 3: asking ' + model + ' for a ruling (should take a few seconds)...');
   var msg = { from: 'Josh', text: 'Sheabot, is "fruit salad" a legit answer for "a sandwich" starting with F?', quoted: '' };
-  // Lighter and older models first: they tend to answer fastest on the free tier.
-  // The newest one goes last, since it can take minutes. Press Stop once you've seen enough.
-  var models = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.5-flash', props.GEMINI_MODEL || 'gemini-flash-latest']
-    .filter(function (m, i, all) { return all.indexOf(m) === i; });
-  models.forEach(function (model, i) {
-    lap('Step 3 of 3 (' + (i + 1) + '/' + models.length + '): asking ' + model + ' for a ruling...');
-    var started = Date.now();
-    try {
-      var p2 = {};
-      Object.keys(props).forEach(function (k) { p2[k] = props[k]; });
-      p2.GEMINI_MODEL = model;
-      var answer = sheaAsk_(p2, sheaSystem_(props), sheaQuestion_(msg, context));
-      lap(model + ' took ' + ((Date.now() - started) / 1000).toFixed(1) + ' seconds and says: ' + answer);
-    } catch (err) {
-      lap(model + ' failed: ' + err.message);
-    }
-  });
-  lap('Done. Sheabot uses ' + (props.GEMINI_MODEL || 'gemini-flash-latest') + ' unless you set a Script Property GEMINI_MODEL to another one.');
+  var started = Date.now();
+  var answer = sheaAsk_(props, sheaSystem_(props), sheaQuestion_(msg, context));
+  lap(model + ' took ' + ((Date.now() - started) / 1000).toFixed(1) + ' seconds and says: ' + answer);
 }
 
 // 2. Tells GREEN-API to forward the group's messages to this script. Run once, after deploying the web app.

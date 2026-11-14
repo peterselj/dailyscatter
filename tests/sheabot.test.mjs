@@ -91,7 +91,7 @@ test('answers a question in the group, as a reply, with the rules and yesterday\
   assert.equal(w.calls.gemini.length, 1);
   const g = w.calls.gemini[0];
   assert.equal(g.key, 'gem-key');
-  assert.equal(g.model, 'gemini-flash-latest');
+  assert.equal(g.model, 'gemini-flash-lite-latest');
   assert.match(g.system, /You are Sheabot/);
   assert.match(g.system, /West Highland white terrier, about 12 years old/);
   assert.match(g.system, /barking at squirrels, getting belly scratches/);
@@ -149,9 +149,9 @@ test('if the AI is down, says so in the chat; if the model name is retired, find
   assert.match(w.calls.sent[0].message, /can't rule right now/);
   w = world({ docs: DOCS });
   const ok = w.res(200, { candidates: [{ content: { parts: [{ text: '❌ Toss it.' }] } }] });
-  w = world({ docs: DOCS, gemini: (model) => (model === 'gemini-flash-latest' ? w.res(404, {}) : ok) });
+  w = world({ docs: DOCS, gemini: (model) => (model === 'gemini-flash-lite-latest' ? w.res(404, {}) : ok) });
   w.post(hook('Sheabot?'));
-  assert.deepEqual(w.calls.gemini.map((c) => c.model), ['gemini-flash-latest', 'gemini-9-flash']);
+  assert.deepEqual(w.calls.gemini.map((c) => c.model), ['gemini-flash-lite-latest', 'gemini-9-flash']);
   assert.equal(w.calls.sent[0].message, '❌ Toss it.');
 });
 
@@ -182,8 +182,7 @@ test('sheabotTest logs each step and Sheabot\'s answer', () => {
   w.sandbox.sheabotTest();
   assert.match(lines[0], /AI key found \(7 characters\)/);
   assert.ok(lines.some((l) => /Flash models on offer: gemini-9-flash, gemini-9-flash-image/.test(l)));
-  assert.ok(lines.some((l) => /gemini-flash-latest took [\d.]+ seconds and says: ✅ Legit/.test(l)));
-  assert.ok(lines.some((l) => /gemini-flash-lite-latest took [\d.]+ seconds and says: ✅ Legit/.test(l)), 'times the lighter model too');
+  assert.match(lines.at(-1), /gemini-flash-lite-latest took [\d.]+ seconds and says: ✅ Legit/);
   assert.equal(w.calls.sent.length, 0, 'the test never posts to WhatsApp');
 });
 

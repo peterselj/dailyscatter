@@ -110,6 +110,7 @@ It knows the house rules and the results the family can already see (yesterday's
 - **Changing how it talks or rules:** add a Script Property `SHEABOT_STYLE` with extra instructions, like "Be tougher on puns." No redeploy needed.
 - **After editing the script itself:** Deploy → Manage deployments → ✎ → Version: **New version** → Deploy. The URL stays the same.
 - **Switching it off:** run `sheabotDisconnect`.
+- **Speed:** it uses Google's "lite" Flash model, which answers in about 2 seconds on the free tier. The full Flash model took over 2 minutes when tried. To use a different model, set a Script Property `GEMINI_MODEL`.
 - **Limits:** it answers at most 30 messages an hour. If Google's free allowance runs out for the day, it says it can't rule right now.
 - **Privacy:** every message in the group passes through GREEN-API and your Google script so Sheabot can hear its name. Only messages that mention Sheabot (and the message they reply to) are sent to Google's AI. On the free tier, Google may use those to improve its products.
 
