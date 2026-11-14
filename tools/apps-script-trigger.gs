@@ -1,10 +1,13 @@
 // Google Apps Script: starts the "Post results to WhatsApp" GitHub job every
 // 10 minutes. GitHub's own schedule is best-effort and often skips runs for
-// hours, so this is the reliable clock. Setup steps are in the README
-// ("Automatic WhatsApp posts" > "A reliable clock").
+// hours, so this is the reliable clock. Setup steps are in docs/whatsapp.md
+// ("A reliable clock").
 //
 // Needs a Script Property named GITHUB_TOKEN: a fine-grained GitHub token with
 // access to only the dailyscatter repo and "Actions: Read and write".
+
+// Your own copy? Change this to your GitHub "owner/repo".
+var REPO = 'peterselj/dailyscatter';
 
 function pokeDailyScatter() {
   const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
@@ -24,7 +27,7 @@ function pokeDailyScatter() {
 
 function poke(token) {
   return UrlFetchApp.fetch(
-    'https://api.github.com/repos/peterselj/dailyscatter/actions/workflows/post-results.yml/dispatches',
+    'https://api.github.com/repos/' + REPO + '/actions/workflows/post-results.yml/dispatches',
     {
       method: 'post',
       contentType: 'application/json',

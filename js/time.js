@@ -1,26 +1,29 @@
-// All game time is US Eastern (America/New_York), DST-aware.
-// A "day id" is the Eastern calendar date as 'YYYY-MM-DD'.
+// All game time is in the group's time zone (TIME_ZONE in config.js), DST-aware.
+// The function names say "et" because the original game runs on US Eastern.
+// A "day id" is the local calendar date as 'YYYY-MM-DD'.
 // A "week id" is the day id of that week's Monday.
+import { TIME_ZONE } from './config.js?v=202611142231';
 
-export const TZ = 'America/New_York';
+export const TZ = TIME_ZONE;
 // Each day's card stays open all day; it closes, and everyone's answers are
-// revealed, at midnight Eastern (the start of the next day).
+// revealed, at local midnight (the start of the next day).
 
-const partsFmt = new Intl.DateTimeFormat('en-US', {
-  timeZone: TZ, hourCycle: 'h23',
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', second: '2-digit',
-});
-
-function etParts(ms) {
+const formatters = {};
+function partsIn(tz, ms) {
+  const fmt = (formatters[tz] ??= new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }));
   const p = {};
-  for (const { type, value } of partsFmt.formatToParts(new Date(ms))) p[type] = value;
+  for (const { type, value } of fmt.formatToParts(new Date(ms))) p[type] = value;
   return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour % 24, mi: +p.minute, s: +p.second };
 }
+const etParts = (ms) => partsIn(TZ, ms);
 
-// Eastern offset from UTC at instant ms, in ms (negative, e.g. -5h or -4h).
-function etOffset(ms) {
-  const p = etParts(ms);
+// A zone's offset from UTC at instant ms, in ms (e.g. -5h for New York in winter).
+function offsetIn(tz, ms) {
+  const p = partsIn(tz, ms);
   return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(ms / 1000) * 1000;
 }
 
@@ -36,16 +39,22 @@ function parseDay(id) {
   return { y, m, d };
 }
 
-// The UTC instant of hh:mm Eastern on the given day.
-export function etInstant(id, hour, minute = 0) {
+// The UTC instant of hh:mm on the given day in a time zone. Works across
+// daylight-saving changes: the offset is looked up at a first guess, then again
+// at the corrected time.
+export function zonedInstant(tz, id, hour, minute = 0) {
   const { y, m, d } = parseDay(id);
-  const guess = Date.UTC(y, m - 1, d, hour, minute);
-  // Sample the offset within an hour of the target instant (ET is UTC-4/-5).
-  // DST switches happen at 2am, so this is exact for midnight and for 4am onward.
-  return guess - etOffset(guess + 4.5 * 3600e3);
+  const wall = Date.UTC(y, m - 1, d, hour, minute);
+  const first = wall - offsetIn(tz, wall);
+  return wall - offsetIn(tz, first);
 }
 
-// When a day's card closes: midnight Eastern at the end of that day.
+// The UTC instant of hh:mm on the given day in the game's time zone.
+export function etInstant(id, hour, minute = 0) {
+  return zonedInstant(TZ, id, hour, minute);
+}
+
+// When a day's card closes: local midnight at the end of that day.
 export function lockTime(id) {
   return etInstant(addDays(id, 1), 0);
 }

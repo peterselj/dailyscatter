@@ -79,7 +79,7 @@ try {
     cards: { josh: done('Josh', '2026-11-10', '09:00', 'P'), z: done('Z', '2026-11-10', '10:00', 'P'), aly: done('Aly', '2026-11-10', '21:30', 'P') },
   });
   r = await job(ET('2026-11-10', '21:40'));
-  assert.match(r.out, /2026-11-10: revealed, waiting until 9:00am ET \(quiet hours\)/);
+  assert.match(r.out, /2026-11-10: revealed, waiting until 9:00am \(quiet hours\)/);
   await job(ET('2026-11-11', '08:55'));
   assert.equal((await sent()).length, 1, 'nothing overnight');
   await job(ET('2026-11-11', '09:05'));
@@ -124,7 +124,7 @@ try {
     cards: { josh: done('Josh', '2026-11-14', '09:00', 'L'), z: done('Z', '2026-11-14', '10:00', 'L'), aly: done('Aly', '2026-11-14', '20:30', 'L') },
   });
   r = await job(ET('2026-11-14', '21:15'));
-  assert.match(r.out, /2026-11-14: due, but it's quiet hours; waiting until 9:00am ET/);
+  assert.match(r.out, /2026-11-14: due, but it's quiet hours; waiting until 9:00am/);
   assert.equal((await sent()).length, 4, 'nothing posted at 9:15pm');
   r = await job(ET('2026-11-15', '09:05'));
   assert.equal((await sent()).length, 5, 'posted at 9:05am');

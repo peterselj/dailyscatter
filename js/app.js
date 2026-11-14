@@ -1,10 +1,10 @@
-import * as T from './time.js?v=202611121238';
-import * as G from './game.js?v=202611121238';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611121238';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611121238';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611121238';
-import { resultsText } from './share.js?v=202611121238';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611121238';
+import * as T from './time.js?v=202611142231';
+import * as G from './game.js?v=202611142231';
+import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611142231';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611142231';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611142231';
+import { resultsText } from './share.js?v=202611142231';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611142231';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -103,6 +103,11 @@ const S = {
 
 // The player whose card this device plays from the Today screen.
 const helped = AS ? G.assistedById(AS) : null;
+if (AS && !helped) {
+  // A helper page (like kenny.html) whose player isn't listed in config.js.
+  document.getElementById('app').textContent = `This page is for a helper player called "${AS}", but config.js doesn't list one (see ASSISTED_PLAYERS).`;
+  throw new Error(`Unknown helper player: ${AS}`);
+}
 
 // ---------------------------------------------------------------------------
 // Routing
@@ -1101,7 +1106,7 @@ function familyEditor() {
   const boxes = people.map(([id, name]) => `<label class="fam"><input type="checkbox" data-act="family" value="${esc(id)}" ${G.family.includes(id) ? 'checked' : ''}> ${esc(name)}</label>`).join('');
   return `<div class="admin-box">
     <p class="label">Family: who counts toward “everyone’s done”</p>
-    <p class="fine">When all the checked people have finished, the day’s results come out early (and get posted to WhatsApp). Kenny is always optional. Leave everyone unchecked to wait for midnight.</p>
+    <p class="fine">When all the checked people have finished, the day’s results come out early (and get posted to WhatsApp). ${ASSISTED_PLAYERS.length ? `${esc(ASSISTED_PLAYERS.map((p) => p.name).join(' and '))} ${ASSISTED_PLAYERS.length > 1 ? 'are' : 'is'} always optional. ` : ''}Leave everyone unchecked to wait for midnight.</p>
     <div class="fam-list">${boxes || '<p class="fine">Nobody has joined yet.</p>'}</div>
   </div>`;
 }

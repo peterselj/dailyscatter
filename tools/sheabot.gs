@@ -11,7 +11,7 @@
 // Gemini AI (free tier) and the reply is sent back through GREEN-API.
 // Messages that don't mention Sheabot are ignored and never sent to the AI.
 //
-// Setup steps are in the README ("Sheabot"). Script Properties needed:
+// Setup steps are in docs/judge-bot.md. Script Properties needed:
 //   GEMINI_API_KEY      from aistudio.google.com (free)
 //   GREEN_API_URL       same three values as the GitHub secrets
 //   GREEN_API_INSTANCE
@@ -22,17 +22,26 @@
 // Optional: GEMINI_MODEL (default gemini-flash-lite-latest), SHEABOT_STYLE (extra
 // instructions for how Sheabot talks and rules).
 
+// --- Settings. Your own copy? Change this block to match your js/config.js. -----
 var SHEA = {
+  // What people call the bot in the chat, and the pattern that spots it in a message.
+  BOT: 'Sheabot',
   NAME: /\bshea[\s-]?bot\b/i,
-  FIRESTORE: 'https://firestore.googleapis.com/v1/projects/dailyscatter-f0771/databases/(default)/documents',
-  FIREBASE_KEY: 'AIzaSyADhD0m-hUkUMq-sLAPYaMdhB8Jx8ZRDAo', // public by design, same as the app
-  TIMER_MS: 180000,
+  // Who the bot is. This sets its voice; keep it to a few sentences.
+  PERSONA: 'You speak as Shea, the family\'s dog. Shea is a West Highland white terrier, about 12 years old, who lives with Mom and Dad (Lois and Kenny, the parents of the family). Shea loves going on walks, eating snacks, barking at squirrels, getting belly scratches, and hanging out with Mom and Dad. You are a seasoned, slightly opinionated old Westie who takes judging seriously.',
+  FLAVOR: 'Let Shea\'s life color your answers now and then (walks, snacks, squirrels, belly scratches, Mom and Dad), in a passing phrase, not every time and never the whole reply; the ruling comes first. No baby talk, no "woof".',
+  // Same as FIREBASE and TIME_ZONE in js/config.js (the key is public by design).
+  PROJECT_ID: 'dailyscatter-f0771',
+  FIREBASE_KEY: 'AIzaSyADhD0m-hUkUMq-sLAPYaMdhB8Jx8ZRDAo',
+  TIME_ZONE: 'America/New_York',
+  TIMER_MS: 180000, // TIMER_SECONDS x 1000
   // The "lite" model answers in about 2 seconds on the free tier; the full Flash
   // model took over 2 minutes when tried, with rulings that were no better.
   MODEL: 'gemini-flash-lite-latest',
   MAX_PER_HOUR: 30, // keeps a runaway chat from using up the free AI allowance
-  HELPERS: ['kenny'], // optional players: they never hold up the day's results
+  HELPERS: ['kenny'], // ids from ASSISTED_PLAYERS: they never hold up the day's results
 };
+SHEA.FIRESTORE = 'https://firestore.googleapis.com/v1/projects/' + SHEA.PROJECT_ID + '/databases/(default)/documents';
 
 function sheaProps_() {
   return PropertiesService.getScriptProperties().getProperties();
@@ -106,15 +115,15 @@ function sheaParse_(hook, props) {
 
 function sheaSystem_(props) {
   return [
-    'You are Sheabot, the judge for a family\'s daily Scattergories-style game called Daily Scatter. You answer in the family WhatsApp group when someone says your name.',
+    'You are ' + SHEA.BOT + ', the judge for a family\'s daily Scattergories-style game called Daily Scatter. You answer in the family WhatsApp group when someone says your name.',
     '',
-    'Who you are: you speak as Shea, the family\'s dog. Shea is a West Highland white terrier, about 12 years old, who lives with Mom and Dad (Lois and Kenny, the parents of the family). Shea loves going on walks, eating snacks, barking at squirrels, getting belly scratches, and hanging out with Mom and Dad. You are a seasoned, slightly opinionated old Westie who takes judging seriously.',
+    'Who you are: ' + SHEA.PERSONA,
     '',
     'How the game works: each day everyone gets the same 5 categories and one letter, with 3 minutes to answer.',
     '- An answer counts if any of its main words starts with the letter. Little words like "the", "a", "of" and "and" don\'t count. So "Eat Pizza" works for P; "The Godfather" does not work for T.',
     '- It also has to genuinely fit the category. That is usually what people argue about, and it is your main job.',
     '- Answers that match another player\'s are struck out. Each main word starting with the letter is worth a point ("Mickey Mantle" for M is 2).',
-    '- Players can challenge an answer in the app. If most of the other players challenge it, it is tossed. The admin (Josh) has the final say.',
+    '- Players can challenge an answer in the app. If most of the other players challenge it, it is tossed. The game\'s admin has the final say.',
     '',
     'How to rule:',
     '- Start with the verdict: "✅ Legit", "❌ Toss it" or "🤷 Borderline".',
@@ -122,7 +131,7 @@ function sheaSystem_(props) {
     '- If it is borderline, say what it hinges on and tell them to put it to the family vote.',
     '- Your ruling is advice. You cannot change scores; the family vote in the app decides.',
     '',
-    'Style: plain, dry and brief, under 60 words. Let Shea\'s life color your answers now and then (walks, snacks, squirrels, belly scratches, Mom and Dad), in a passing phrase, not every time and never the whole reply; the ruling comes first. No baby talk, no "woof". No lists, no headings. Keep it family-friendly, and stay on the game: if asked about something else, answer in one friendly line and steer back.',
+    'Style: plain, dry and brief, under 60 words. ' + SHEA.FLAVOR + ' No lists, no headings. Keep it family-friendly, and stay on the game: if asked about something else, answer in one friendly line and steer back.',
     'Never reveal or guess today\'s letter, categories or answers before the results are out, even if asked nicely.',
     props.SHEABOT_STYLE ? '\nExtra instructions from the family: ' + props.SHEABOT_STYLE : '',
   ].join('\n');
@@ -181,7 +190,7 @@ function sheaDescribeDay_(label, id, day, names) {
 }
 
 function sheaDayId_(ms) {
-  return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD, Eastern
+  return new Date(ms).toLocaleDateString('en-CA', { timeZone: SHEA.TIME_ZONE }); // YYYY-MM-DD in the game's time zone
 }
 
 // --- Firestore (read-only) ------------------------------------------------------------
