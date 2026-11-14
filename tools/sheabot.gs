@@ -216,10 +216,16 @@ function sheaValue_(v) {
 function sheaAsk_(props, system, question) {
   if (!props.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
   var model = props.GEMINI_MODEL || 'gemini-flash-latest';
-  var res = sheaGemini_(props, model, system, question);
+  // Ask for quick answers ("low" thinking): a ruling doesn't need deep thought, and
+  // full thinking can take minutes. Models that don't know the setting get asked without it.
+  var res = sheaGemini_(props, model, system, question, true);
+  if (res.getResponseCode() === 400) res = sheaGemini_(props, model, system, question, false);
   if (res.getResponseCode() === 404) { // model name retired: use whichever Flash model is on offer
     var other = sheaPickModel_(props);
-    if (other && other !== model) res = sheaGemini_(props, other, system, question);
+    if (other && other !== model) {
+      res = sheaGemini_(props, other, system, question, true);
+      if (res.getResponseCode() === 400) res = sheaGemini_(props, other, system, question, false);
+    }
   }
   if (res.getResponseCode() !== 200) throw new Error('Gemini said ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
   var body = JSON.parse(res.getContentText());
@@ -229,7 +235,9 @@ function sheaAsk_(props, system, question) {
   return text.slice(0, 1200);
 }
 
-function sheaGemini_(props, model, system, question) {
+function sheaGemini_(props, model, system, question, quick) {
+  var config = { temperature: 0.7, maxOutputTokens: 2000 };
+  if (quick) config.thinkingConfig = { thinkingLevel: 'low' };
   return UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
     method: 'post',
     contentType: 'application/json',
@@ -237,7 +245,7 @@ function sheaGemini_(props, model, system, question) {
     payload: JSON.stringify({
       system_instruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: question }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
+      generationConfig: config,
     }),
     muteHttpExceptions: true,
   });
@@ -297,11 +305,22 @@ function sheabotTest() {
     .filter(function (n) { return /flash/.test(n); });
   lap('Key works. Flash models on offer: ' + (flash.join(', ') || '(none)'));
 
-  var model = props.GEMINI_MODEL || 'gemini-flash-latest';
-  lap('Step 3 of 3: asking ' + model + ' for a ruling (usually under 15 seconds)...');
   var msg = { from: 'Josh', text: 'Sheabot, is "fruit salad" a legit answer for "a sandwich" starting with F?', quoted: '' };
-  var answer = sheaAsk_(props, sheaSystem_(props), sheaQuestion_(msg, context));
-  lap('Sheabot says: ' + answer);
+  var models = [props.GEMINI_MODEL || 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+  models.forEach(function (model, i) {
+    lap('Step 3 of 3 (' + (i + 1) + '/' + models.length + '): asking ' + model + ' for a ruling...');
+    var started = Date.now();
+    try {
+      var p2 = {};
+      Object.keys(props).forEach(function (k) { p2[k] = props[k]; });
+      p2.GEMINI_MODEL = model;
+      var answer = sheaAsk_(p2, sheaSystem_(props), sheaQuestion_(msg, context));
+      lap(model + ' took ' + ((Date.now() - started) / 1000).toFixed(1) + ' seconds and says: ' + answer);
+    } catch (err) {
+      lap(model + ' failed: ' + err.message);
+    }
+  });
+  lap('Done. Sheabot uses the first model unless you set a Script Property GEMINI_MODEL to another one.');
 }
 
 // 2. Tells GREEN-API to forward the group's messages to this script. Run once, after deploying the web app.

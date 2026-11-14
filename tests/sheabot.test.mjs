@@ -42,8 +42,8 @@ function world({ props = {}, docs = {}, gemini } = {}) {
           { name: 'models/gemini-9-flash-image', supportedGenerationMethods: ['generateContent'] },
         ] });
         const model = url.match(/models\/([^:]+):generateContent/)[1];
-        calls.gemini.push({ model, key: opts.headers['x-goog-api-key'], system: body.system_instruction.parts[0].text, question: body.contents[0].parts[0].text });
-        return gemini ? gemini(model) : res(200, { candidates: [{ content: { parts: [{ text: '✅ Legit. A sandwich is a sandwich.' }] } }] });
+        calls.gemini.push({ model, key: opts.headers['x-goog-api-key'], system: body.system_instruction.parts[0].text, question: body.contents[0].parts[0].text, thinking: body.generationConfig.thinkingConfig?.thinkingLevel ?? null });
+        return gemini ? gemini(model, body) : res(200, { candidates: [{ content: { parts: [{ text: '✅ Legit. A sandwich is a sandwich.' }] } }] });
       }
       if (url.startsWith('https://green.test/waInstance11/sendMessage/tok')) { calls.sent.push(body); return res(200, { idMessage: 'OUT1' }); }
       if (url.startsWith('https://green.test/waInstance11/setSettings/tok')) { calls.settings.push(body); return res(200, { saveSettings: true }); }
@@ -161,6 +161,18 @@ test('still rules if the game data can\'t be loaded, and honors the family\'s st
   assert.match(w.calls.gemini[0].system, /Extra instructions from the family: Be extra tough on Josh\./);
 });
 
+test('asks for quick answers, and falls back if a model doesn\'t know that setting', () => {
+  let w = world({ docs: DOCS });
+  w.post(hook('Sheabot?'));
+  assert.equal(w.calls.gemini[0].thinking, 'low');
+  w = world({ docs: DOCS });
+  const ok = w.res(200, { candidates: [{ content: { parts: [{ text: '🤷 Borderline.' }] } }] });
+  w = world({ docs: DOCS, gemini: (model, body) => (body.generationConfig.thinkingConfig ? w.res(400, { error: 'unknown field' }) : ok) });
+  w.post(hook('Sheabot?'));
+  assert.deepEqual(w.calls.gemini.map((c) => c.thinking), ['low', null]);
+  assert.equal(w.calls.sent[0].message, '🤷 Borderline.');
+});
+
 test('sheabotTest logs each step and Sheabot\'s answer', () => {
   const w = world({ docs: DOCS });
   const lines = [];
@@ -168,7 +180,8 @@ test('sheabotTest logs each step and Sheabot\'s answer', () => {
   w.sandbox.sheabotTest();
   assert.match(lines[0], /AI key found \(7 characters\)/);
   assert.ok(lines.some((l) => /Flash models on offer: gemini-9-flash, gemini-9-flash-image/.test(l)));
-  assert.match(lines.at(-1), /Sheabot says: ✅ Legit/);
+  assert.ok(lines.some((l) => /gemini-flash-latest took [\d.]+ seconds and says: ✅ Legit/.test(l)));
+  assert.ok(lines.some((l) => /gemini-flash-lite-latest took [\d.]+ seconds and says: ✅ Legit/.test(l)), 'times the lighter model too');
   assert.equal(w.calls.sent.length, 0, 'the test never posts to WhatsApp');
 });
 
