@@ -93,6 +93,8 @@ test('answers a question in the group, as a reply, with the rules and yesterday\
   assert.equal(g.key, 'gem-key');
   assert.equal(g.model, 'gemini-flash-latest');
   assert.match(g.system, /You are Sheabot/);
+  assert.match(g.system, /West Highland white terrier, about 12 years old/);
+  assert.match(g.system, /barking at squirrels, getting belly scratches/);
   assert.match(g.system, /any of its main words starts with the letter/);
   assert.match(g.system, /Your ruling is advice/);
   assert.match(g.question, /Zach says: Hey sheabot is "fruit salad" a legit sandwich starting with F\?$/);
