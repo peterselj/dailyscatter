@@ -1,7 +1,7 @@
 // Run: node --test tests/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
+import { normalize, matchKey, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
 import * as T from '../js/time.js';
 import { PROMPTS, LETTERS, promptsFor, rollLetter, swapRepeats } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
@@ -20,6 +20,47 @@ test('normalize ignores case, punctuation, accents and a leading article', () =>
   assert.equal(normalize('salt & pepper'), normalize('Salt and Pepper'));
   assert.equal(normalize('The'), 'the'); // a lone article stays
   assert.equal(normalize(''), '');
+});
+
+test('singular and plural count as the same answer', () => {
+  const same = (a, b) => assert.equal(matchKey(a), matchKey(b), `${a} = ${b}`);
+  const different = (a, b) => assert.notEqual(matchKey(a), matchKey(b), `${a} != ${b}`);
+  same('Nacho', 'nachos');
+  same('Hot dog', 'Hot Dogs');
+  same('Berry', 'berries');
+  same('Cookie', 'Cookies');
+  same('Peach', 'peaches');
+  same('Box', 'boxes');
+  same('Potato', 'potatoes');
+  same('Shoe', 'shoes');
+  same('Toe', 'toes');
+  same('Horse', 'horses');
+  same('The Beatles', 'beatle');
+  same('Mouse', 'mice');
+  same('McDonald’s', 'McDonalds');
+  same('Kids', 'kid');
+  different('Bus', 'bu');
+  different('Paris', 'Pari');
+  different('Glass', 'Gla');
+  different('Gas', 'ga');
+  different('Grape', 'Grapefruit');
+  different('Swiss', 'Swis');
+  different('Texas', 'Texan');
+  different('Uno', 'Under');
+  assert.equal(matchKey('  '), '');
+
+  const d = day({
+    josh: card('Josh', ['Grape', 'Goat', '', '', '']),
+    zach: card('Zach', ['grapes!', 'Gorillas', '', '', '']),
+    aly: card('Aly', ['Guava', 'Gorilla', 'Geese', 'goose', '']),
+  });
+  const { players } = scoreDay(d);
+  assert.equal(players.josh.answers[0].dupe, true, 'Grape and grapes strike each other');
+  assert.equal(players.zach.answers[0].points, 0);
+  assert.equal(players.aly.answers[0].points, 1);
+  assert.equal(players.zach.answers[1].dupe, true, 'Gorillas and Gorilla too');
+  assert.equal(players.aly.answers[3].repeatOf, 2, 'and you can’t reuse your own answer as a plural');
+  assert.equal(players.josh.answers[1].points, 1);
 });
 
 test('validity checks the first letter after the article', () => {

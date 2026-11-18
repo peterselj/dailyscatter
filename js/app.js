@@ -1,10 +1,10 @@
-import * as T from './time.js?v=202611142231';
-import * as G from './game.js?v=202611142231';
-import { scoreDay, scoreWeek, hasPlayed, normalize } from './scoring.js?v=202611142231';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611142231';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611142231';
-import { resultsText } from './share.js?v=202611142231';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611142231';
+import * as T from './time.js?v=202611182351';
+import * as G from './game.js?v=202611182351';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611182351';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611182351';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611182351';
+import { resultsText } from './share.js?v=202611182351';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611182351';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -650,9 +650,9 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
 
   // No using the same answer twice on one card: warn while typing, clear it on leaving the box.
   const repeatOf = (i) => {
-    const norm = normalize(answers[i]);
+    const norm = matchKey(answers[i]);
     if (!norm) return -1;
-    return answers.findIndex((a, j) => j !== i && normalize(a) === norm);
+    return answers.findIndex((a, j) => j !== i && matchKey(a) === norm);
   };
   // Only the box being typed in turns red (no extra text, so nothing jumps); it's cleared when you leave it.
   const showRepeat = (el) => {
@@ -700,8 +700,8 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     clearInterval(iv);
     // Drop any repeat that's still there (keep the first one).
     answers.forEach((a, i) => {
-      const norm = normalize(a);
-      if (norm && answers.slice(0, i).some((b) => normalize(b) === norm)) { answers[i] = ''; inputs[i].value = ''; }
+      const norm = matchKey(a);
+      if (norm && answers.slice(0, i).some((b) => matchKey(b) === norm)) { answers[i] = ''; inputs[i].value = ''; }
     });
     inputs.forEach((el) => { el.disabled = true; });
     document.activeElement?.blur?.();
