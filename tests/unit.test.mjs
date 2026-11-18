@@ -377,6 +377,20 @@ test('cards close at midnight Eastern at the end of the day, across daylight sav
   }
 });
 
+test('time zones other than Eastern work, including on daylight-saving days', () => {
+  const iso = (tz, id, h) => new Date(T.zonedInstant(tz, id, h)).toISOString();
+  assert.equal(iso('Europe/London', '2026-01-15', 0), '2026-01-15T00:00:00.000Z');
+  assert.equal(iso('Europe/London', '2026-07-01', 0), '2026-06-30T23:00:00.000Z');
+  assert.equal(iso('Europe/London', '2026-03-29', 0), '2026-03-29T00:00:00.000Z'); // clocks go forward at 1am that day
+  assert.equal(iso('Europe/London', '2026-03-30', 0), '2026-03-29T23:00:00.000Z');
+  assert.equal(iso('Europe/London', '2026-10-25', 9), '2026-10-25T09:00:00.000Z'); // clocks went back at 2am
+  assert.equal(iso('America/Los_Angeles', '2026-11-01', 0), '2026-11-01T07:00:00.000Z'); // fall-back day
+  assert.equal(iso('America/Los_Angeles', '2026-11-01', 9), '2026-11-01T17:00:00.000Z');
+  assert.equal(iso('Australia/Sydney', '2026-10-04', 9), '2026-10-03T22:00:00.000Z'); // spring forward (southern)
+  assert.equal(iso('Asia/Kolkata', '2026-06-01', 0), '2026-05-31T18:30:00.000Z'); // half-hour offset
+  assert.equal(iso('America/New_York', '2026-03-08', 0), '2026-03-08T05:00:00.000Z');
+});
+
 test('weeks run Monday to Sunday', () => {
   assert.equal(T.weekId('2026-11-05'), '2026-11-02'); // Thu -> Mon
   assert.equal(T.weekId('2026-11-02'), '2026-11-02');

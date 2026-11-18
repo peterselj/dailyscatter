@@ -4,7 +4,7 @@
 // When:
 //   - A day's results come out at midnight, or as soon as everyone in the
 //     family (set in admin Settings) has finished. They're posted right then,
-//     except during quiet hours (9pm-9am Eastern): then at 9am.
+//     except during quiet hours (9pm-9am in the game's time zone): then at 9am.
 //   - After Sunday's results, the week's final standings are posted too.
 //   - Nothing is posted twice: each post is recorded in the database (posts/...).
 //
@@ -22,7 +22,7 @@
 //   --playtest     use the playtest data (pt_*), ignore quiet hours, and post to
 //                  WHATSAPP_TEST_CHAT_ID (dry run if that isn't set)
 //   --list-groups  print the WhatsApp groups the linked number is in, with their ids
-import { FIREBASE, ASSISTED_PLAYERS, NUDGE_HOUR } from '../js/config.js';
+import { FIREBASE, ASSISTED_PLAYERS, NUDGE_HOUR, SITE_URL } from '../js/config.js';
 import { encFields, decFields } from '../js/codec.js';
 import * as T from '../js/time.js';
 import { scoreDay, scoreWeek, applyNames } from '../js/scoring.js';
@@ -33,7 +33,7 @@ const args = new Set(process.argv.slice(2));
 const PT = args.has('--playtest');
 const env = process.env;
 const NOW = env.NOW ? (Number(env.NOW) || Date.parse(env.NOW)) : Date.now();
-const APP_URL = env.APP_URL || 'https://peterselj.github.io/dailyscatter/';
+const APP_URL = env.APP_URL || SITE_URL;
 const API = (env.FIRESTORE_BASE || 'https://firestore.googleapis.com/v1/').replace(/\/?$/, '/');
 const ROOT = `projects/${FIREBASE.projectId}/databases/(default)/documents`;
 const GREEN = {
@@ -154,7 +154,7 @@ async function main() {
 
   // Is the WhatsApp link still up? WhatsApp drops linked devices if the bot's phone
   // hasn't connected in 14 days. If it's down, don't burn retries on posts that can't
-  // go through; once a day (the run between noon and 12:10pm ET) fail loudly so
+  // go through; once a day (the run between noon and 12:10pm) fail loudly so
   // GitHub emails the owner.
   if (configured && !DRY) {
     // Only a clear "not authorized" answer counts. If Green API itself hiccups
@@ -164,7 +164,7 @@ async function main() {
     try { state = (await green('getStateInstance'))?.stateInstance ?? 'unknown'; } catch (e) { log(`Couldn't check the WhatsApp link just now (${e.message.trim()}); carrying on.`); }
     if (['notAuthorized', 'blocked', 'yellowCard'].includes(state)) {
       log(`The WhatsApp link is down (Green API says "${state}"). To fix it: open WhatsApp Business on the bot's phone, then scan the QR code again in the Green API console. Nothing is lost; due posts go out once it's back.`);
-      const et = new Date(NOW).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+      const et = new Date(NOW).toLocaleString('en-US', { timeZone: T.TZ, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
       const [h, m] = et.split(':').map(Number);
       if (h === 12 && m < 10) process.exitCode = 1;
       return;
@@ -197,9 +197,9 @@ async function main() {
     const at = revealTime(day, id, family, base);
     if (NOW < at) { log(`${id}: not revealed yet`); continue; }
     const when = PT ? NOW : postTime(at);
-    if (NOW < when) { log(`${id}: revealed, waiting until ${T.clockLabel(when)} ET (quiet hours)`); continue; }
+    if (NOW < when) { log(`${id}: revealed, waiting until ${T.clockLabel(when)} (quiet hours)`); continue; }
     // A post that's running late still never goes out during quiet hours.
-    if (!PT && inQuietHours(NOW)) { log(`${id}: due, but it's quiet hours; waiting until 9:00am ET`); continue; }
+    if (!PT && inQuietHours(NOW)) { log(`${id}: due, but it's quiet hours; waiting until 9:00am`); continue; }
     if (!PT && NOW - when > STALE_AFTER) { log(`${id}: too old to post now, skipping`); continue; }
 
     // The week so far (revealed days only).

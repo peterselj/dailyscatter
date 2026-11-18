@@ -10,6 +10,9 @@
     "stamp": "node tools/stamp.mjs",
     "devices": "node tests/devices.mjs",
     "check": "npm test && npm run e2e && npm run devices && npm run poster",
-    "poster": "node tests/poster.mjs"
-  }
+    "poster": "node tests/poster.mjs",
+    "screens": "node tests/readme-screens.mjs",
+    "doctor": "node tools/doctor.mjs"
+  },
+  "license": "MIT"
 }
