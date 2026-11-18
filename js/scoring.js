@@ -7,8 +7,8 @@
 //    rule (the first word must start with the letter), which still counts too,
 //    so "Of Mice and Men" works for O. Case, accents and punctuation are ignored.
 //  - Answers to the same prompt that match each other are struck out (0 points)
-//    for everyone who wrote them. Matching ignores case, punctuation, accents
-//    and a leading article. An admin can also confirm two different spellings
+//    for everyone who wrote them. Matching ignores case, punctuation, accents,
+//    a leading article, and singular vs plural ("nacho" = "nachos"). An admin can also confirm two different spellings
 //    as "the same", which strikes both.
 //  - A valid, unique answer scores 1 point per word that starts with the
 //    letter, skipping filler words like "of" and "and" (always at least 1).
@@ -45,6 +45,31 @@ export function normalize(text) {
   const w = words(text);
   while (w.length > 1 && ARTICLES.has(w[0])) w.shift();
   return w.join(' ');
+}
+
+// Singular and plural forms of a word map to the same key, so "nacho" matches
+// "nachos" and "berry" matches "berries". The key is only for comparing answers
+// (it isn't always a real word: "cookie" and "cookies" both become "cooky").
+// Short words and endings that usually aren't plurals (-ss, -us, -is) are left alone.
+const IRREGULAR = { men: 'man', women: 'woman', children: 'child', feet: 'foot', teeth: 'tooth', mice: 'mouse', geese: 'goose', people: 'person' };
+
+function singular(word) {
+  if (IRREGULAR[word]) return IRREGULAR[word];
+  let w = word;
+  if (w.length > 3 && !/\d/.test(w)) {
+    if (/(ch|sh|x|z|ss)es$/.test(w)) w = w.slice(0, -2); // peaches, boxes, glasses
+    else if (w.endsWith('s') && !/(ss|us|is)$/.test(w)) w = w.slice(0, -1); // nachos, berries -> berrie
+  }
+  if (w.length > 3) {
+    if (w.endsWith('ie')) w = `${w.slice(0, -2)}y`; // berrie -> berry; cookie -> cooky
+    else if (w.endsWith('oe')) w = w.slice(0, -1); // potatoe -> potato; shoe -> sho
+  }
+  return w;
+}
+
+// The form two answers are compared in: normalize(), with plurals folded together.
+export function matchKey(text) {
+  return normalize(text).split(' ').filter(Boolean).map(singular).join(' ');
 }
 
 export function isValid(text, letter) {
@@ -103,7 +128,7 @@ export function scoreDay(day) {
       const text = played ? String(card.answers?.[i] ?? '').trim() : '';
       answers.push({
         text,
-        norm: normalize(text),
+        norm: matchKey(text), // for spotting matches; plurals count as the same answer
         valid: isValid(text, letter),
         dupe: false,
         dupeWith: [],
@@ -125,7 +150,7 @@ export function scoreDay(day) {
     players[id] = { name: card.name || id, skipped: !!card.skipped, played, total: 0, answers };
   }
 
-  // Duplicates: per prompt, group identical normalized answers plus confirmed merges.
+  // Duplicates: per prompt, group answers with the same match key, plus confirmed merges.
   for (let i = 0; i < n; i++) {
     const parent = {};
     const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
