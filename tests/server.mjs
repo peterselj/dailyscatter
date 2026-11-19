@@ -14,6 +14,7 @@ let fakeVersion = null; // tests: pretend a newer release is live
 // Fake GREEN-API (WhatsApp) for testing the posting job.
 let sent = [];
 let failSends = 0;
+let lastDispatch = null; // tests: when the Google clock last started a run
 let waState = 'authorized'; // "days/2026-11-05" -> { fields, createTime, updateTime }
 export const stats = { writes: 0, reads: 0 };
 
@@ -117,6 +118,15 @@ export function createServer() {
     if (url.pathname === '/__mock/sent') return send(res, 200, sent);
     if (url.pathname === '/__mock/fail-send') { failSends = Number(url.searchParams.get('n') || 0); return send(res, 200, {}); }
     if (url.pathname === '/__mock/wa-state') { waState = url.searchParams.get('s') || 'authorized'; return send(res, 200, {}); }
+    if (url.pathname === '/__mock/last-dispatch') { lastDispatch = url.searchParams.get('at'); return send(res, 200, {}); }
+    if (url.pathname.startsWith('/github/')) {
+      if (/\/actions\/workflows\/post-results\.yml\/runs$/.test(url.pathname)) {
+        if (req.headers.authorization !== 'Bearer gh-token') return send(res, 401, {});
+        if (lastDispatch === 'glitch') return send(res, 502, {});
+        return send(res, 200, { workflow_runs: lastDispatch ? [{ created_at: lastDispatch }] : [] });
+      }
+      return send(res, 404, {});
+    }
     if (url.pathname.startsWith('/green/')) {
       if (/\/sendMessage\//.test(url.pathname)) {
         if (failSends > 0) { failSends--; return send(res, 500, { message: 'pretend WhatsApp is down' }); }

@@ -236,6 +236,26 @@ try {
   assert.equal((await sent()).filter((m) => /still to play/.test(m.message)).length, 1, 'no reminder during quiet hours');
   ok('Evening reminder: one at 6pm naming who’s left, none if everyone’s done or it’s late');
 
+  // Watchdog: a GitHub-scheduled run checks that the Google clock is still starting runs.
+  const GH = { ...WA, GITHUB_EVENT_NAME: 'schedule', GITHUB_TOKEN: 'gh-token', GITHUB_REPOSITORY: 'o/r', GITHUB_API_URL: `${BASE}/github` };
+  const at = ET('2026-11-21', '09:43');
+  await fetch(`${BASE}/__mock/last-dispatch?at=${new Date(at - 15 * 60e3).toISOString()}`);
+  r = await job(at, { env: GH });
+  assert.equal(r.code, 0, 'clock ran 15 minutes ago: fine');
+  assert.ok(!/CLOCK HAS STOPPED/.test(r.out));
+  await fetch(`${BASE}/__mock/last-dispatch?at=${new Date(at - 15.5 * 3600e3).toISOString()}`);
+  r = await job(at, { env: GH });
+  assert.equal(r.code, 1, 'clock silent for 15 hours: the run fails so GitHub emails');
+  assert.match(r.out, /THE GOOGLE CLOCK HAS STOPPED: its last run was 15h 30m ago \(Fri, Nov 20, 6:13pm\)/);
+  assert.match(r.out, /2026-11-19: /, 'and it still goes on to post what is due');
+  r = await job(at, { env: { ...GH, GITHUB_EVENT_NAME: 'workflow_dispatch' } });
+  assert.equal(r.code, 0, 'a run the clock started never raises the alarm');
+  await fetch(`${BASE}/__mock/last-dispatch?at=glitch`);
+  r = await job(at, { env: GH });
+  assert.equal(r.code, 0, 'a GitHub hiccup on the check is not an alarm');
+  assert.match(r.out, /Couldn't check on the Google clock just now/);
+  ok('Watchdog: a scheduled run fails loudly if the Google clock has gone quiet');
+
   console.log('\nAll posting checks passed.');
 } catch (e) {
   console.error('\nFAILED:', e.message);
