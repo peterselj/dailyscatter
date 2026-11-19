@@ -1,7 +1,8 @@
 // Builds the text for sharing a day's results into a group chat (WhatsApp,
 // iMessage...). WhatsApp formatting: *bold*, ~strikethrough~.
-import { scoreDay } from './scoring.js?v=202611182351';
-import { highlights } from './stats.js?v=202611182351';
+import { scoreDay } from './scoring.js?v=202611191149';
+import { highlights } from './stats.js?v=202611191149';
+import { letterShort } from './prompts.js?v=202611191149';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -23,11 +24,14 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
   const rank = (p) => playing.findIndex((x) => players[x].total === players[p].total);
   const out = [];
 
-  out.push(`🎲 *Daily Scatter* · ${dayLabel} · Letter *${day.letter}*`);
+  out.push(`🎲 *Daily Scatter* · ${dayLabel} · Letter *${letterShort(day)}*`);
   if (day.title) out.push(`✨ ${clean(day.title)}`);
   if (note) out.push(note);
   out.push('');
   for (const p of playing) out.push(`${MEDALS[rank(p)] ?? `${rank(p) + 1}.`} ${clean(players[p].name)} ${players[p].total}`);
+  for (const p of playing.filter((x) => players[x].bonus)) {
+    out.push(`🎁 ${clean(players[p].name)}: ${clean(day.special?.bonusLabel ?? 'Bonus')} +${players[p].bonus.toLocaleString('en-US')}`);
+  }
   const sitting = order.filter((p) => !players[p].played).map((p) => clean(players[p].name));
   if (sitting.length) out.push(`😴 ${sitting.join(', ')} sat out`);
   const hl = highlights(day);
@@ -48,7 +52,7 @@ export function resultsText({ day, dayLabel, weekRows = [], weekFinal = false, u
     }
   });
 
-  out.push('', '~crossed out~ = matched someone · ✗ = no word with the letter · 🚩 = challenged · ⚖️ = admin’s call');
+  out.push('', `${day.special?.dupesOk ? 'Duplicates were OK today' : '~crossed out~ = matched someone'} · ✗ = no word with the letter · 🚩 = challenged · ⚖️ = admin’s call`);
   if (weekRows.length) {
     out.push('', `*${weekFinal ? 'Final for the week' : 'Week so far'}:* ${weekRows.map((r) => `${clean(r.name)} ${r.total}`).join(' · ')}`);
   }

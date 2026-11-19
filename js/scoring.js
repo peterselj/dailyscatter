@@ -19,6 +19,9 @@
 //    played that day flag it (and at least two do), it's tossed: 0 points.
 //  - An admin override sets the points for one answer outright and wins over
 //    everything above.
+//  - Special cards (day.special, see SPECIAL_CARDS in prompts.js) can allow
+//    more than one letter, let matching and repeated answers score, and add a
+//    bonus to some players' totals.
 
 export const PROMPTS_PER_CARD = 5;
 
@@ -72,17 +75,20 @@ export function matchKey(text) {
   return normalize(text).split(' ').filter(Boolean).map(singular).join(' ');
 }
 
+// `letter` is one letter ('M') or a list of them (['M', 'L']: either counts).
+const letterSet = (letter) => new Set([].concat(letter).map((l) => String(l).toLowerCase()));
+
 export function isValid(text, letter) {
-  const l = String(letter).toLowerCase();
+  const ls = letterSet(letter);
   const n = normalize(text);
-  if (n && n[0] === l) return true; // official rule: first word (after a/an/the)
-  return words(text).some((w) => !FILLER.has(w) && w[0] === l); // house rule: any main word
+  if (n && ls.has(n[0])) return true; // official rule: first word (after a/an/the)
+  return words(text).some((w) => !FILLER.has(w) && ls.has(w[0])); // house rule: any main word
 }
 
 export function basePoints(text, letter) {
   if (!isValid(text, letter)) return 0;
-  const l = String(letter).toLowerCase();
-  const n = words(text).filter((w) => !FILLER.has(w) && w[0] === l).length;
+  const ls = letterSet(letter);
+  const n = words(text).filter((w) => !FILLER.has(w) && ls.has(w[0])).length;
   return Math.max(1, n);
 }
 
@@ -102,14 +108,18 @@ export const mergeKey = (idx, a, b) => {
  * Score one day.
  * @param {object} day  Day document: { letter, prompts, cards, flags, merges, overrides }
  * @returns {{
- *   players: Record<string, { name, skipped, played, total, answers: Array<{
+ *   players: Record<string, { name, skipped, played, total, bonus, answers: Array<{
  *     text, norm, valid, dupe, dupeWith: string[], base, override, points, flags: string[], merges: object[]
  *   }> }>,
  *   order: string[]   // player ids sorted by total desc, then name
  * }}
  */
 export function scoreDay(day) {
-  const letter = day?.letter ?? '';
+  const special = day?.special ?? {};
+  const letter = special.letters ?? day?.letter ?? '';
+  const dupesOk = !!special.dupesOk;
+  const bonusFor = new Set(special.bonus?.players ?? []);
+  const bonusPoints = Number(special.bonus?.points) || 0;
   const cards = day?.cards ?? {};
   const flags = Object.values(day?.flags ?? {});
   const merges = Object.values(day?.merges ?? {});
@@ -145,9 +155,9 @@ export function scoreDay(day) {
     answers.forEach((a, i) => {
       if (!a.norm) return;
       const first = answers.findIndex((b) => b.norm === a.norm);
-      if (first < i) a.repeatOf = first;
+      if (first < i && !dupesOk) a.repeatOf = first;
     });
-    players[id] = { name: card.name || id, skipped: !!card.skipped, played, total: 0, answers };
+    players[id] = { name: card.name || id, skipped: !!card.skipped, played, total: 0, bonus: 0, answers };
   }
 
   // Duplicates: per prompt, group answers with the same match key, plus confirmed merges.
@@ -171,7 +181,9 @@ export function scoreDay(day) {
     for (const g of Object.values(groups)) {
       if (g.length < 2) continue;
       for (const id of g) {
-        players[id].answers[i].dupe = true;
+        // On a "duplicates are OK" card, matches still get noticed (for the
+        // "great minds" highlight) but aren't struck.
+        players[id].answers[i].dupe = !dupesOk;
         players[id].answers[i].dupeWith = g.filter((x) => x !== id);
       }
     }
@@ -202,7 +214,8 @@ export function scoreDay(day) {
       a.override = o && Number.isFinite(o.points) ? o.points : null;
       a.points = a.override ?? a.base;
     });
-    p.total = p.answers.reduce((s, a) => s + a.points, 0);
+    p.bonus = p.played && bonusFor.has(id) ? bonusPoints : 0;
+    p.total = p.answers.reduce((s, a) => s + a.points, 0) + p.bonus;
   }
 
   const order = ids.slice().sort((a, b) =>

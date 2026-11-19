@@ -1,8 +1,8 @@
 // Fun facts worked out from the answers: daily highlights, play streaks and
 // all-time records. Pure functions (no DOM, no network), unit-tested, and
 // shared by the app and the WhatsApp posting job.
-import { scoreDay, scoreWeek, hasPlayed } from './scoring.js?v=202611182351';
-import { addDays, weekId } from './time.js?v=202611182351';
+import { scoreDay, scoreWeek, hasPlayed } from './scoring.js?v=202611191149';
+import { addDays, weekId } from './time.js?v=202611191149';
 
 const list = (names) => (names.length < 3 ? names.join(' & ') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`);
 
@@ -23,7 +23,7 @@ export function highlights(day, max = 4) {
     const seen = new Set();
     for (const p of playing) {
       const a = players[p].answers[i];
-      if (!a.dupe || seen.has(p)) continue;
+      if (!a.dupeWith.length || seen.has(p)) continue;
       const group = [p, ...a.dupeWith.filter((x) => players[x]?.played)];
       group.forEach((x) => seen.add(x));
       groups.push({ i, group, text: a.text });
@@ -125,8 +125,9 @@ export function hallOfFame(days, currentWeek) {
     for (const p of playing) {
       const r = row(p, players[p].name);
       r.daysPlayed++;
-      r.points += players[p].total;
-      r.bestDay = Math.max(r.bestDay, players[p].total);
+      const own = players[p].total - players[p].bonus; // a special-card bonus doesn't make a record
+      r.points += own;
+      r.bestDay = Math.max(r.bestDay, own);
       if (playing.length > 1 && top > 0 && players[p].total === top) r.daysWon++;
     }
   }
