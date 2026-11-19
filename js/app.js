@@ -1,11 +1,11 @@
-import * as T from './time.js?v=202611191052';
-import * as G from './game.js?v=202611191052';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191052';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611191052';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191052';
-import { resultsText } from './share.js?v=202611191052';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611191052';
-import { specialRules, letterShort, letterWords } from './prompts.js?v=202611191052';
+import * as T from './time.js?v=202611191137';
+import * as G from './game.js?v=202611191137';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191137';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611191137';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191137';
+import { resultsText } from './share.js?v=202611191137';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611191137';
+import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611191137';
 
 // The letter tile. Days with more than one letter ("M/L") get a smaller font.
 const letterTile = (day, cls = '') => {
@@ -311,11 +311,11 @@ async function viewToday() {
   const mainName = AS ? helped.name : S.me.name;
   const mine = day?.cards?.[mainId];
   const done = AS
-    ? !!mine?.skipped || (mine?.answers ?? []).filter((a) => String(a).trim()).length === 5
+    ? !!mine?.skipped || (mine?.answers ?? []).filter((a) => String(a).trim()).length >= promptCount(today)
     : !!mine?.startedAt && !G.cardOpen(mine, today, now);
   const helpers = AS ? [] : ASSISTED_PLAYERS.map((p) => {
     const c = day?.cards?.[p.id];
-    const finished = !!c?.skipped || (c?.answers ?? []).filter((a) => String(a).trim()).length === 5;
+    const finished = !!c?.skipped || (c?.answers ?? []).filter((a) => String(a).trim()).length >= promptCount(today);
     return { html: assistedCard(day, p.id, p.name, now, lock, false), finished };
   });
 
@@ -343,12 +343,13 @@ function myCard(day, now, lock) {
   const keep = st && st.current >= 2 && !st.playedToday
     ? `<p class="streak-line">🔥 ${st.current}-day streak. Play today to keep it going!</p>` : '';
   const left = lock - now;
-  const short = left < TIMER_SECONDS * 1000 ? `<p class="warn">Heads up: only ${esc(T.timerLabel(left))} left before today’s card closes at midnight.</p>` : '';
+  const mins = Math.round(timerFor(S.today) / 60);
+  const short = left < timerFor(S.today) * 1000 ? `<p class="warn">Heads up: only ${esc(T.timerLabel(left))} left before today’s card closes at midnight.</p>` : '';
   if (!day) {
     return `<section class="card hero">
       <p class="eyebrow">You’re first today!</p>
       <h3>Roll today’s letter</h3>
-      <p>You’ll roll the letter for everyone, then your 3-minute timer starts right away.</p>
+      <p>You’ll roll the letter for everyone, then your ${mins}-minute timer starts right away.</p>
       ${specialNote(S.today)}${short}${keep}
       <button class="btn primary big" data-act="start">🎲 Roll &amp; start</button>
     </section>`;
@@ -357,7 +358,7 @@ function myCard(day, now, lock) {
     return `<section class="card hero">
       <p class="eyebrow">Letter rolled by ${esc(day.rolledBy)} at ${esc(T.clockLabel(day.rolledAt))}</p>
       <h3>Ready when you are</h3>
-      <p>5 categories, one secret letter, 3 minutes. The letter stays hidden until you hit start.</p>
+      <p>${promptCount(S.today)} categories, one secret letter, ${mins} minutes. The letter stays hidden until you hit start.</p>
       ${specialNote(S.today)}${short}${keep}
       <button class="btn primary big" data-act="start">Start my card</button>
     </section>`;
@@ -393,8 +394,9 @@ function assistedCard(day, pid, name, now, lock, isMain) {
     status = `😴 ${esc(name)} is sitting out today.`;
     actions = `<button class="btn ${isMain ? '' : 'sm'}" data-act="unskip" data-pid="${pid}">Actually, let’s play</button>`;
   } else if (card?.startedAt) {
-    status = filled === 5 ? '✓ All 5 answers are in.' : `${filled} of 5 answered.`;
-    actions = `${open}${filled === 5 ? 'Review' : 'Continue'}</a>${filled ? '' : skip}`;
+    const n = promptCount(S.today);
+    status = filled >= n ? `✓ All ${n} answers are in.` : `${filled} of ${n} answered.`;
+    actions = `${open}${filled >= n ? 'Review' : 'Continue'}</a>${filled ? '' : skip}`;
   } else {
     status = isMain ? `No timer. Ask ${esc(name)} each category and type in the answer. You can stop and come back.` : 'No timer.';
     actions = `${open}${day ? 'Start' : '🎲 Roll &amp; start'}${isMain ? ` ${esc(name)}’s card` : ''}</a>${skip}`;
@@ -415,7 +417,7 @@ function whoPlayed(day, now) {
   const cards = Object.entries(day?.cards ?? {});
   if (!cards.length) return '';
   const chips = cards.sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([pid, c]) => {
-    const allIn = c.assisted && (c.answers ?? []).filter((a) => String(a).trim()).length === 5;
+    const allIn = c.assisted && (c.answers ?? []).filter((a) => String(a).trim()).length >= promptCount(S.today);
     const icon = c.skipped ? '😴' : G.cardOpen(c, S.today, now) && !allIn ? '⏳' : '✓';
     return `<span class="chip">${icon} ${esc(c.name)}${streakBadge(pid)}</span>`;
   }).join('');
@@ -633,7 +635,7 @@ function keepInView(row, scroller) {
   setTimeout(go, 400);
 }
 
-// One play screen for both modes. Timed: 3-minute clock. Assisted (Kenny):
+// One play screen for both modes. Timed: 3-minute clock (or a special card's). Assisted (Kenny):
 // no clock, a "Kenny mode" tag instead, and the card stays open until the lock.
 function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   const today = S.today;

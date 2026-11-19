@@ -1,12 +1,18 @@
 // The prompt pool, letters, and how a day's card is chosen.
 //
+import { TIMER_SECONDS } from './config.js?v=202611191137';
+
 // To add a special card (a birthday, a holiday), add an entry to SPECIAL_CARDS
-// keyed by date. Give it exactly 5 prompts; `letter` is optional (if left out,
-// the first person to open the app that day rolls one as usual). The prompts and
-// letter are saved when the day is rolled, so changes after that don't apply.
+// keyed by date. Give it 5 prompts (or more for a long card, see below);
+// `letter` is optional (if left out, the first person to open the app that day
+// rolls one as usual). The first 5 prompts and the letter are saved when the
+// day is rolled, so changes to them after that don't apply.
 //
 // Optional extras (worked out on every phone from this file, never saved, so
 // they can be changed any time, even after the day is played):
+//   prompts:  more than 5 makes a long card. The database only holds 5 (see
+//             firestore.rules), so prompts 6 and up are added from this file.
+//   timerSeconds: the clock for that day (default TIMER_SECONDS).
 //   letters:  more than one letter, e.g. ['M', 'L']: a word starting with any of
 //             them counts. `letter` must be the first one.
 //   dupesOk:  matching answers aren't struck, and you can use the same answer
@@ -19,38 +25,28 @@
 //   theme:    a color theme for the whole app on that day (see css/styles.css,
 //             [data-theme=...]). Currently: 'babyblue'.
 
-const LOIS_DAY = {
-  letters: ['M', 'L'],
-  dupesOk: true,
-  theme: 'babyblue',
-  note: 'It’s Lois’s birthday weekend! Any word starting with M or L counts, and duplicate answers are OK for this one.',
-};
-
 export const SPECIAL_CARDS = {
-  '2026-11-21': {
-    ...LOIS_DAY,
-    title: 'Lois’s birthday weekend 🎈',
-    letter: 'M',
-    prompts: [
-      'Who gives the best hugs',
-      'Who is always right (just ask her)',
-      'Who you call first with good news',
-      'Who deserves breakfast in bed',
-      'Who taught you everything you know',
-    ],
-  },
   '2026-11-22': {
-    ...LOIS_DAY,
     title: 'Happy birthday, Lois! 🎂',
     letter: 'M',
+    letters: ['M', 'L'],
+    dupesOk: true,
+    theme: 'babyblue',
+    note: 'It’s Lois’s birthday! 10 categories, 5 minutes. Any word starting with M or L counts, and duplicate answers are OK for this one.',
+    timerSeconds: 300,
     prompts: [
       'Who is the world’s greatest superhero',
       'Who is loved by everyone',
       'Who is amazing at canasta',
       'Whose favorite thing at the diner is French toast',
+      'Who gives the best hugs',
+      'Who is always right (just ask her)',
+      'Who has the best laugh',
+      'Who deserves a parade',
+      'Who gets the biggest slice of cake',
       'Who is the birthday girl',
     ],
-    bonus: { points: 10000, players: ['lowey', 'lois'] },
+    bonus: { points: 10000, players: ['lois', 'lowey'] },
     bonusLabel: 'Birthday bonus',
   },
   // '2026-12-25': {
@@ -59,6 +55,10 @@ export const SPECIAL_CARDS = {
   //   letter: 'S',
   // },
 };
+
+// How many categories and how many seconds a day's card has.
+export const promptCount = (dayId) => Math.max(5, SPECIAL_CARDS[dayId]?.prompts?.length ?? 5);
+export const timerFor = (dayId) => SPECIAL_CARDS[dayId]?.timerSeconds ?? TIMER_SECONDS;
 
 // The rules a special card changes, for a day id. Scoring reads these from
 // day.special (see withSpecial); the database never stores them.
@@ -70,12 +70,16 @@ export function specialRules(dayId) {
   return { letters, dupesOk: !!dupesOk, bonus, bonusLabel, note, theme };
 }
 
-// Attaches a special card's rules to a loaded day document (in memory only).
+// Attaches a special card's rules to a loaded day document (in memory only),
+// and fills in a long card's prompts past the 5 the database holds.
 // Returns the day.
 export function withSpecial(dayId, day) {
   if (!day) return day;
   const rules = specialRules(dayId);
   if (rules) day.special = rules; else delete day.special;
+  const all = SPECIAL_CARDS[dayId]?.prompts ?? [];
+  const saved = day.prompts ?? [];
+  if (all.length > 5 && saved.length === 5 && saved.every((p, i) => p === all[i])) day.prompts = all.slice();
   return day;
 }
 
@@ -229,7 +233,7 @@ const PER_WEEK = 35;
 
 export function promptsFor(dayId, weekId, weekdayIdx) {
   const special = SPECIAL_CARDS[dayId];
-  if (special?.prompts?.length === 5) return special.prompts.slice();
+  if (special?.prompts?.length >= 5) return special.prompts.slice(0, 5); // the rest: see withSpecial
   if (weekId < CYCLES_START) {
     const deck = shuffled(PROMPTS, `week:${weekId}`);
     return deck.slice(weekdayIdx * 5, weekdayIdx * 5 + 5);

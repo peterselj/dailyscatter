@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611191052';
-import * as T from './time.js?v=202611191052';
-import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial } from './prompts.js?v=202611191052';
-import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD, applyNames } from './scoring.js?v=202611191052';
-import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611191052';
-import { PLAYTEST } from './mode.js?v=202611191052';
-import { revealTime, stillPlaying } from './reveal.js?v=202611191052';
+import * as db from './db.js?v=202611191137';
+import * as T from './time.js?v=202611191137';
+import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial, timerFor, promptCount } from './prompts.js?v=202611191137';
+import { flagKey, mergeKey, overrideKey, applyNames } from './scoring.js?v=202611191137';
+import { ASSISTED_PLAYERS } from './config.js?v=202611191137';
+import { PLAYTEST } from './mode.js?v=202611191137';
+import { revealTime, stillPlaying } from './reveal.js?v=202611191137';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
@@ -83,7 +83,7 @@ export async function rollDay(today, rollerName) {
   const special = SPECIAL_CARDS[today];
   const data = {
     letter: special?.letter ?? rollLetter(used),
-    prompts: special?.prompts?.length === 5
+    prompts: special?.prompts?.length >= 5
       ? promptsFor(today, wid, T.weekdayIndex(today))
       : swapRepeats(promptsFor(today, wid, T.weekdayIndex(today)), earlier.flatMap((d) => days[d]?.prompts ?? []), today),
     rolledBy: rollerName,
@@ -170,7 +170,7 @@ export function deadline(card, dayId) {
   const lock = lockAt(dayId);
   if (!card?.startedAt) return lock;
   if (card.assisted) return lock;
-  return Math.min(card.startedAt + TIMER_SECONDS * 1000, lock, card.doneAt ?? Infinity);
+  return Math.min(card.startedAt + timerFor(dayId) * 1000, lock, card.doneAt ?? Infinity);
 }
 
 export function cardOpen(card, dayId, now = Date.now()) {
@@ -186,7 +186,7 @@ export async function startCard(today, pid, name, { assisted = false, delayMs = 
   const card = {
     name,
     startedAt: now + delayMs,
-    answers: existing?.answers?.length ? existing.answers : Array(PROMPTS_PER_CARD).fill(''),
+    answers: existing?.answers?.length ? existing.answers : Array(promptCount(today)).fill(''),
     updatedAt: now,
     skipped: false,
   };
@@ -204,7 +204,7 @@ export async function setSkipped(today, pid, name, skipped) {
   const card = days[today]?.cards?.[pid];
   if (card) return saveCardFields(today, pid, { skipped });
   return writeDay(today, {
-    cards: { [pid]: { name, assisted: true, skipped, answers: Array(PROMPTS_PER_CARD).fill(''), updatedAt: Date.now() } },
+    cards: { [pid]: { name, assisted: true, skipped, answers: Array(promptCount(today)).fill(''), updatedAt: Date.now() } },
   }, [`cards.${pid}`]);
 }
 

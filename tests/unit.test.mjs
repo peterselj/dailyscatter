@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalize, matchKey, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
 import * as T from '../js/time.js';
-import { PROMPTS, LETTERS, SPECIAL_CARDS, promptsFor, rollLetter, swapRepeats, withSpecial, letterShort, letterWords } from '../js/prompts.js';
+import { PROMPTS, LETTERS, SPECIAL_CARDS, promptsFor, rollLetter, swapRepeats, withSpecial, letterShort, letterWords, promptCount, timerFor } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText, nudgeText, weekText } from '../js/share.js';
 import { highlights, streaks, hallOfFame } from '../js/stats.js';
@@ -240,10 +240,25 @@ test('special card bonus only counts if the player plays; other days are untouch
   assert.equal(scoreDay(normal).players.lowey.answers[1].repeatOf, 0);
 });
 
+test('a long special card: 5 prompts saved, the rest added on load, with its own timer', () => {
+  const id = '2026-11-22';
+  const saved = promptsFor(id, T.weekId(id), T.weekdayIndex(id));
+  assert.equal(saved.length, 5); // all the database accepts
+  const d = withSpecial(id, { letter: 'M', prompts: saved, cards: {} });
+  assert.equal(d.prompts.length, 10);
+  assert.equal(promptCount(id), 10);
+  assert.equal(timerFor(id), 300);
+  assert.equal(timerFor('2026-11-23'), 180);
+  assert.equal(cardEnd({ startedAt: Date.parse('2026-11-22T15:00:00Z') }, id), Date.parse('2026-11-22T15:05:00Z'));
+  // A day saved with different prompts is left alone.
+  assert.equal(withSpecial(id, { letter: 'M', prompts: ['a', 'b', 'c', 'd', 'e'] }).prompts.length, 5);
+});
+
 test('special cards have 5 prompts and a letter that is their first allowed letter', () => {
   for (const [id, c] of Object.entries(SPECIAL_CARDS)) {
     assert.match(id, /^\d{4}-\d{2}-\d{2}$/);
-    assert.equal(c.prompts.length, 5, id);
+    assert.ok(c.prompts.length >= 5, id);
+    assert.equal(new Set(c.prompts).size, c.prompts.length, `${id}: no repeated prompts`);
     if (c.letters) assert.equal(c.letter, c.letters[0], id);
     if (c.letter) assert.match(c.letter, /^[A-Z]$/, id); // the database only accepts one letter
   }
