@@ -26,6 +26,7 @@ import { FIREBASE, ASSISTED_PLAYERS, NUDGE_HOUR, SITE_URL } from '../js/config.j
 import { encFields, decFields } from '../js/codec.js';
 import * as T from '../js/time.js';
 import { scoreDay, scoreWeek, applyNames } from '../js/scoring.js';
+import { withSpecial } from '../js/prompts.js';
 import { resultsText, weekText, nudgeText } from '../js/share.js';
 import { revealTime, postTime, inQuietHours, stillPlaying, QUIET_START } from '../js/reveal.js';
 
@@ -74,6 +75,7 @@ async function get(path) {
   let data = null;
   try { data = decFields((await call('GET', path)).fields); } catch (e) { if (e.status !== 404) throw e; }
   if (data?.cards) applyNames(data, renames);
+  if (path.startsWith(`${C.days}/`)) withSpecial(path.slice(C.days.length + 1), data);
   cache.set(path, data);
   return data;
 }
@@ -178,7 +180,7 @@ async function main() {
   const today = T.addDays(T.dayId(NOW), shift);
 
   const candidates = PT
-    ? (await list(C.days)).map((d) => { cache.set(`${C.days}/${d.id}`, applyNames(d.data, names)); return d.id; }).sort()
+    ? (await list(C.days)).map((d) => { cache.set(`${C.days}/${d.id}`, withSpecial(d.id, applyNames(d.data, names))); return d.id; }).sort()
     : [T.addDays(today, -2), T.addDays(today, -1), today];
   await nudge({ today, family, names });
 

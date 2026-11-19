@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalize, matchKey, isValid, basePoints, scoreDay, scoreWeek, mergeKey, overrideKey, flagKey, applyNames } from '../js/scoring.js';
 import * as T from '../js/time.js';
-import { PROMPTS, LETTERS, promptsFor, rollLetter, swapRepeats } from '../js/prompts.js';
+import { PROMPTS, LETTERS, SPECIAL_CARDS, promptsFor, rollLetter, swapRepeats, withSpecial, letterShort, letterWords } from '../js/prompts.js';
 import { encFields, decFields } from '../js/codec.js';
 import { resultsText, nudgeText, weekText } from '../js/share.js';
 import { highlights, streaks, hallOfFame } from '../js/stats.js';
@@ -201,6 +201,52 @@ test('repeating your own answer only counts the first one', () => {
   assert.equal(players.josh.answers[4].repeatOf, 2);
   assert.equal(players.josh.total, 2);
   assert.equal(players.josh.answers[3].repeatOf, null); // blanks are not repeats
+});
+
+test('special card: M or L, duplicates OK, birthday bonus counts for the day and week', () => {
+  const d = withSpecial('2026-11-22', day({
+    lowey: card('Lowey', ['Me', 'Moi', 'Me', 'Me!', 'Lovely Me']),
+    josh: card('Josh', ['Mom', 'Lois', 'Mom', 'Mom', 'Nana']),
+    zach: card('Zach', ['Mom', 'Mother', 'Lois', 'Mom', 'Mom']),
+  }));
+  assert.equal(letterShort(d), 'M/L');
+  assert.equal(letterWords(d), 'M or L');
+  const { players, order } = scoreDay(d);
+  assert.equal(players.josh.answers[0].dupe, false); // matches aren't struck
+  assert.deepEqual(players.josh.answers[0].dupeWith, ['zach']); // but are still noticed
+  assert.equal(players.josh.answers[2].repeatOf, null); // repeats on your own card are fine
+  assert.equal(players.josh.answers[1].points, 1); // L counts
+  assert.equal(players.josh.answers[4].points, 0); // N doesn't
+  assert.equal(players.josh.total, 4);
+  assert.equal(players.zach.total, 5);
+  assert.equal(players.lowey.answers[4].points, 2); // Lovely Me: L + M
+  assert.equal(players.lowey.bonus, 10000);
+  assert.equal(players.lowey.total, 10006);
+  assert.equal(order[0], 'lowey');
+  assert.equal(players.josh.bonus, 0);
+  const week = scoreWeek([{ id: '2026-11-22', day: d }]);
+  assert.deepEqual(week.winners, ['lowey']);
+  assert.match(resultsText({ day: d, dayLabel: 'Sun, Nov 22' }), /Letter \*M\/L\*[\s\S]*Birthday bonus \+10,000/);
+  // The hall of fame leaves the bonus out of best day and average.
+  assert.equal(hallOfFame({ '2026-11-22': d }).find((r) => r.id === 'lowey').bestDay, 6);
+  assert.ok(highlights(d).some((h) => /Mom/.test(h.text))); // "great minds" still shows up
+});
+
+test('special card bonus only counts if the player plays; other days are untouched', () => {
+  const skip = withSpecial('2026-11-22', day({ lowey: { name: 'Lowey', skipped: true }, josh: card('Josh', ['Mom', '', '', '', '']) }));
+  assert.equal(scoreDay(skip).players.lowey.total, 0);
+  const normal = withSpecial('2026-11-23', day({ lowey: card('Lowey', ['Me', 'Me', '', '', '']) }));
+  assert.equal(normal.special, undefined);
+  assert.equal(scoreDay(normal).players.lowey.answers[1].repeatOf, 0);
+});
+
+test('special cards have 5 prompts and a letter that is their first allowed letter', () => {
+  for (const [id, c] of Object.entries(SPECIAL_CARDS)) {
+    assert.match(id, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(c.prompts.length, 5, id);
+    if (c.letters) assert.equal(c.letter, c.letters[0], id);
+    if (c.letter) assert.match(c.letter, /^[A-Z]$/, id); // the database only accepts one letter
+  }
 });
 
 test('every file reference carries the same version stamp', async () => {

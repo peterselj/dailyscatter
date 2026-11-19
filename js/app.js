@@ -1,10 +1,36 @@
-import * as T from './time.js?v=202611182351';
-import * as G from './game.js?v=202611182351';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611182351';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611182351';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611182351';
-import { resultsText } from './share.js?v=202611182351';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611182351';
+import * as T from './time.js?v=202611191052';
+import * as G from './game.js?v=202611191052';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191052';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611191052';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191052';
+import { resultsText } from './share.js?v=202611191052';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611191052';
+import { specialRules, letterShort, letterWords } from './prompts.js?v=202611191052';
+
+// The letter tile. Days with more than one letter ("M/L") get a smaller font.
+const letterTile = (day, cls = '') => {
+  const multi = (day?.special?.letters?.length ?? 1) > 1;
+  return `<div class="letter-tile ${cls}${multi ? ' duo' : ''}" aria-label="Letter ${esc(letterWords(day))}">${esc(letterShort(day))}</div>`;
+};
+
+// A special card's note ("duplicate answers are OK..."), if it has one.
+const specialNote = (dayId) => {
+  const note = specialRules(dayId)?.note;
+  return note ? `<p class="special-note">🎉 ${esc(note)}</p>` : '';
+};
+
+// A special card can recolor the whole app for its day (css: [data-theme=...]).
+function applyTheme(dayId) {
+  const theme = specialRules(dayId)?.theme ?? '';
+  const root = document.documentElement;
+  if ((root.dataset.theme ?? '') === theme) return;
+  if (theme) root.dataset.theme = theme; else delete root.dataset.theme;
+  // The phone's status bar color follows the page background.
+  requestAnimationFrame(() => {
+    const bg = getComputedStyle(document.body).backgroundColor;
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.dataset.orig ??= m.content; m.content = theme ? bg : m.dataset.orig; });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -136,6 +162,7 @@ async function render() {
   try { await Promise.all([PLAYTEST ? G.loadClock() : null, G.loadFamily()]); } catch { /* offline */ }
   if (S.famOk && Date.now() - namesAt > 5 * 60_000) { namesAt = Date.now(); G.listPlayers().catch(() => {}); }
   S.today = G.todayId();
+  applyTheme(S.today);
 
   if (!S.famOk || (!S.me && !AS)) return renderGate();
 
@@ -322,7 +349,7 @@ function myCard(day, now, lock) {
       <p class="eyebrow">You’re first today!</p>
       <h3>Roll today’s letter</h3>
       <p>You’ll roll the letter for everyone, then your 3-minute timer starts right away.</p>
-      ${short}${keep}
+      ${specialNote(S.today)}${short}${keep}
       <button class="btn primary big" data-act="start">🎲 Roll &amp; start</button>
     </section>`;
   }
@@ -331,7 +358,7 @@ function myCard(day, now, lock) {
       <p class="eyebrow">Letter rolled by ${esc(day.rolledBy)} at ${esc(T.clockLabel(day.rolledAt))}</p>
       <h3>Ready when you are</h3>
       <p>5 categories, one secret letter, 3 minutes. The letter stays hidden until you hit start.</p>
-      ${short}${keep}
+      ${specialNote(S.today)}${short}${keep}
       <button class="btn primary big" data-act="start">Start my card</button>
     </section>`;
   }
@@ -349,7 +376,7 @@ function myCard(day, now, lock) {
 }
 
 function answerList(day, card) {
-  return `<div class="mine"><div class="letter-tile sm">${esc(day.letter)}</div><ol>
+  return `<div class="mine">${letterTile(day, 'sm')}<ol>
     ${day.prompts.map((p, i) => {
       const a = card.answers?.[i] ?? '';
       return `<li><span class="p">${esc(p)}</span><span class="a ${a ? '' : 'blank'}">${a ? esc(a) : '—'}</span></li>`;
@@ -410,7 +437,7 @@ function yesterdayCard(yid) {
   const mineLine = mine === null ? '' : ` · <span class="nowrap">${AS ? esc(helped.name) : 'You'}: <strong>${mine}</strong></span>`;
   return `<section class="card yday">
     <a class="yday-top" href="#/yesterday">
-      <div class="letter-tile sm">${esc(day.letter)}</div>
+      ${letterTile(day, 'sm')}
       <div class="yd-text">
         <p class="eyebrow">Yesterday’s results</p>
         <p>🏆 <strong>${champs}</strong> won with ${top}${mineLine}</p>
@@ -505,7 +532,7 @@ async function renderPlay(pid, name, assisted) {
     const fresh = !card?.startedAt || card.skipped;
     if (!assisted && card?.startedAt && !G.cardOpen(card, today)) { go('#/'); return; }
     if (fresh) {
-      const reveal = rollAnimation(day.letter, isNew);
+      const reveal = rollAnimation(day, isNew);
       card = await G.startCard(today, pid, name, { assisted, delayMs: assisted ? 0 : 1300 });
       await reveal;
       day = G.days[today];
@@ -518,7 +545,8 @@ async function renderPlay(pid, name, assisted) {
   playCard(day, pid, card, { assisted, name });
 }
 
-function rollAnimation(letter, rolling) {
+function rollAnimation(day, rolling) {
+  const letter = letterShort(day);
   const ov = document.createElement('div');
   ov.className = 'roll';
   ov.innerHTML = `<p>${rolling ? 'Rolling today’s letter…' : 'Today’s letter is…'}</p><div class="letter-tile xl spin">?</div>`;
@@ -529,6 +557,7 @@ function rollAnimation(letter, rolling) {
   return new Promise((res) => setTimeout(() => {
     clearInterval(iv);
     tile.textContent = letter;
+    if (letter.length > 1) tile.classList.add('duo');
     tile.classList.remove('spin');
     tile.classList.add('land');
     setTimeout(() => { ov.classList.add('out'); setTimeout(() => ov.remove(), 250); res(); }, 650);
@@ -614,7 +643,8 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   const bk = store.get(`ds.bk.${today}.${pid}`);
   if (bk?.answers && bk.at > (card.updatedAt ?? 0)) bk.answers.forEach((a, i) => { answers[i] = a; });
 
-  const L = esc(day.letter);
+  const L = esc(letterShort(day));
+  const dupesOk = !!day.special?.dupesOk;
   const status = assisted
     ? `<span class="mode-tag">${esc(name)} mode</span>`
     : `<span class="t">${esc(T.timerLabel(G.deadline(card, today) - Date.now()))}</span>`;
@@ -626,12 +656,13 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   app.innerHTML = `
     <div class="play screen ${assisted ? 'assisted' : ''}">
       <div class="play-top">
-        <div class="letter-tile sm" aria-label="Letter ${L}">${L}</div>
+        ${letterTile(day, 'sm')}
         <span class="save" aria-live="polite"></span>
         <div class="clock">${status}</div>
         ${assisted ? '' : '<div class="tbar" aria-hidden="true"><i></i></div>'}
       </div>
       <div class="scroller">
+        ${specialNote(today)}
         <form class="answers" autocomplete="off" onsubmit="return false">
           ${day.prompts.map((p, i) => `
             <label class="ans">
@@ -649,9 +680,10 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
   const inputs = [...app.querySelectorAll('.answers input')];
 
   // No using the same answer twice on one card: warn while typing, clear it on leaving the box.
+  // (Unless it's a "duplicates are OK" special card.)
   const repeatOf = (i) => {
     const norm = matchKey(answers[i]);
-    if (!norm) return -1;
+    if (!norm || dupesOk) return -1;
     return answers.findIndex((a, j) => j !== i && matchKey(a) === norm);
   };
   // Only the box being typed in turns red (no extra text, so nothing jumps); it's cleared when you leave it.
@@ -701,7 +733,7 @@ function playCard(day, pid, card, { assisted = false, name = '' } = {}) {
     // Drop any repeat that's still there (keep the first one).
     answers.forEach((a, i) => {
       const norm = matchKey(a);
-      if (norm && answers.slice(0, i).some((b) => matchKey(b) === norm)) { answers[i] = ''; inputs[i].value = ''; }
+      if (!dupesOk && norm && answers.slice(0, i).some((b) => matchKey(b) === norm)) { answers[i] = ''; inputs[i].value = ''; }
     });
     inputs.forEach((el) => { el.disabled = true; });
     document.activeElement?.blur?.();
@@ -802,6 +834,9 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
     : '';
   const standings = playing.map((pid, i) => `
     <li class="${pid === meId ? 'me' : ''}"><span class="rank">${rankLabel(playing, players, i)}</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">${players[pid].total}</span></li>`).join('')
+    + (playing.some((pid) => players[pid].bonus)
+      ? `<li class="bonus-line"><span class="rank">🎁</span><span class="nm">${playing.filter((pid) => players[pid].bonus).map((pid) => `${esc(players[pid].name)}: ${esc(day.special?.bonusLabel ?? 'Bonus')}`).join(', ')}</span><span class="pts">+${Math.max(...playing.map((pid) => players[pid].bonus)).toLocaleString('en-US')}</span></li>`
+      : '')
     + sitting.map((pid) => `<li class="out"><span class="rank">😴</span><span class="nm">${esc(players[pid].name)}</span><span class="pts">–</span></li>`).join('');
 
   const hl = highlights(day);
@@ -832,11 +867,11 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
 
   return `${top}
     <section class="card day-head">
-      <div class="letter-tile">${esc(day.letter)}</div>
+      ${letterTile(day)}
       <div><p class="eyebrow">${day.title ? `✨ ${esc(day.title)} · ` : ''}Rolled by ${esc(day.rolledBy)}</p>${youLine}<ol class="standings">${standings}</ol></div>
     </section>
     ${hlCard}
-    <p class="fine">Struck-through answers matched someone else’s. Tap any answer to challenge it${AS ? '' : ' or mark two as the same'}. If most of the other players challenge it, it’s tossed.</p>
+    <p class="fine">${day.special?.dupesOk ? 'Duplicate answers were OK today, so matches still score.' : 'Struck-through answers matched someone else’s.'} Tap any answer to challenge it${AS ? '' : ' or mark two as the same'}. If most of the other players challenge it, it’s tossed.</p>
     ${sections}
     <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
 }
@@ -881,7 +916,7 @@ function openAnswerSheet(dayId, pid, idx) {
 
   const info = [];
   if (!a.text) info.push('No answer.');
-  else if (!a.valid) info.push(`No word starts with ${esc(day.letter)}, so no points.`);
+  else if (!a.valid) info.push(`No word starts with ${esc(letterWords(day))}, so no points.`);
   if (a.repeatOf !== null) info.push(`Struck: ${esc(players[pid].name)} already used this for #${a.repeatOf + 1}.`);
   if (a.dupe) info.push(`Struck: same as ${a.dupeWith.map((x) => esc(nameOf(x))).join(', ')}.`);
   if (a.flags.length) {
@@ -912,7 +947,7 @@ function openAnswerSheet(dayId, pid, idx) {
   sheetEl.innerHTML = `
     <div class="sheet-card" role="dialog" aria-modal="true" data-day="${dayId}" data-pid="${pid}" data-i="${idx}">
       <div class="grab"></div>
-      <p class="eyebrow">${esc(day.prompts[idx])} · ${esc(day.letter)}</p>
+      <p class="eyebrow">${esc(day.prompts[idx])} · ${esc(letterShort(day))}</p>
       <h3>${esc(players[pid].name)}: ${a.text ? `“${esc(a.text)}”` : '—'}</h3>
       <p class="big-pts">${a.points} point${a.points === 1 ? '' : 's'}</p>
       ${info.map((t) => `<p>${t}</p>`).join('')}
@@ -926,7 +961,7 @@ function openAnswerSheet(dayId, pid, idx) {
           <span class="step-val">${a.points}</span>
           <button class="btn step" data-act="override" data-pts="${Math.min(20, a.points + 1)}" ${a.points >= 20 ? 'disabled' : ''} aria-label="One point more">+</button>
         </div>
-        <p class="fine">Automatic score: ${a.base}${a.dupe ? ' (struck as a match)' : !a.valid ? ` (doesn’t start with ${esc(day.letter)})` : ''}.${a.override !== null ? ' <button class="link" data-act="override" data-pts="reset">Reset to automatic</button>' : ''}</p>
+        <p class="fine">Automatic score: ${a.base}${a.dupe ? ' (struck as a match)' : !a.valid ? ` (doesn’t start with ${esc(letterWords(day))})` : ''}.${a.override !== null ? ' <button class="link" data-act="override" data-pts="reset">Reset to automatic</button>' : ''}</p>
         ${a.flags.length ? '<button class="btn" data-act="clear-flags">Clear flags</button>' : ''}</div>` : ''}
       <button class="btn ghost big" data-act="close">Close</button>
     </div>`;
@@ -980,7 +1015,7 @@ async function viewWeek(arg) {
     const status = future ? 'Coming up' : !day ? 'Nobody played' : !revealed(d) ? `In progress · ${n} played` : `${n} played`;
     return `<a class="dayrow ${future ? 'future' : ''}" href="${future ? '#/week' : `#/day/${d}`}">
       <span class="dl">${esc(T.dayLabel(d))}</span>
-      <span class="lt">${day && revealed(d) ? esc(day.letter) : ''}</span>
+      <span class="lt">${day && revealed(d) ? esc(letterShort(day)) : ''}</span>
       <span class="st">${status}</span></a>`;
   }).join('');
 

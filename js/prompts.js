@@ -2,14 +2,88 @@
 //
 // To add a special card (a birthday, a holiday), add an entry to SPECIAL_CARDS
 // keyed by date. Give it exactly 5 prompts; `letter` is optional (if left out,
-// the first person to open the app that day rolls one as usual).
+// the first person to open the app that day rolls one as usual). The prompts and
+// letter are saved when the day is rolled, so changes after that don't apply.
+//
+// Optional extras (worked out on every phone from this file, never saved, so
+// they can be changed any time, even after the day is played):
+//   letters:  more than one letter, e.g. ['M', 'L']: a word starting with any of
+//             them counts. `letter` must be the first one.
+//   dupesOk:  matching answers aren't struck, and you can use the same answer
+//             more than once on your own card.
+//   bonus:    { points, players: [player ids] } added to those players' total
+//             for the day (only if they play). It counts toward the day and the
+//             week, but not toward "best day" or "average" in the hall of fame.
+//   bonusLabel: how the bonus is shown, e.g. 'Birthday bonus'.
+//   note:     a line shown on the card before and while you play.
+//   theme:    a color theme for the whole app on that day (see css/styles.css,
+//             [data-theme=...]). Currently: 'babyblue'.
+
+const LOIS_DAY = {
+  letters: ['M', 'L'],
+  dupesOk: true,
+  theme: 'babyblue',
+  note: 'It’s Lois’s birthday weekend! Any word starting with M or L counts, and duplicate answers are OK for this one.',
+};
 
 export const SPECIAL_CARDS = {
+  '2026-11-21': {
+    ...LOIS_DAY,
+    title: 'Lois’s birthday weekend 🎈',
+    letter: 'M',
+    prompts: [
+      'Who gives the best hugs',
+      'Who is always right (just ask her)',
+      'Who you call first with good news',
+      'Who deserves breakfast in bed',
+      'Who taught you everything you know',
+    ],
+  },
+  '2026-11-22': {
+    ...LOIS_DAY,
+    title: 'Happy birthday, Lois! 🎂',
+    letter: 'M',
+    prompts: [
+      'Who is the world’s greatest superhero',
+      'Who is loved by everyone',
+      'Who is amazing at canasta',
+      'Whose favorite thing at the diner is French toast',
+      'Who is the birthday girl',
+    ],
+    bonus: { points: 10000, players: ['lowey', 'lois'] },
+    bonusLabel: 'Birthday bonus',
+  },
   // '2026-12-25': {
   //   title: 'Merry Christmas!',
   //   prompts: ['Things on a Christmas tree', 'Christmas movies', 'Gifts you would love to get', 'Holiday foods', 'Reindeer names (real or made up)'],
   //   letter: 'S',
   // },
+};
+
+// The rules a special card changes, for a day id. Scoring reads these from
+// day.special (see withSpecial); the database never stores them.
+export function specialRules(dayId) {
+  const c = SPECIAL_CARDS[dayId];
+  if (!c) return null;
+  const { letters, dupesOk, bonus, bonusLabel, note, theme } = c;
+  if (!letters && !dupesOk && !bonus && !note && !theme) return null;
+  return { letters, dupesOk: !!dupesOk, bonus, bonusLabel, note, theme };
+}
+
+// Attaches a special card's rules to a loaded day document (in memory only).
+// Returns the day.
+export function withSpecial(dayId, day) {
+  if (!day) return day;
+  const rules = specialRules(dayId);
+  if (rules) day.special = rules; else delete day.special;
+  return day;
+}
+
+// "M", or "M/L" (short, for the letter tile) and "M or L" (for sentences).
+export const letterShort = (day) => (day?.special?.letters ?? [day?.letter ?? '']).join('/');
+export const letterWords = (day) => {
+  const l = day?.special?.letters ?? [day?.letter ?? ''];
+  return l.length < 2 ? l[0] : `${l.slice(0, -1).join(', ')} or ${l[l.length - 1]}`;
 };
 
 // Hard letters are left out on purpose.

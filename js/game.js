@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611182351';
-import * as T from './time.js?v=202611182351';
-import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS } from './prompts.js?v=202611182351';
-import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD, applyNames } from './scoring.js?v=202611182351';
-import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611182351';
-import { PLAYTEST } from './mode.js?v=202611182351';
-import { revealTime, stillPlaying } from './reveal.js?v=202611182351';
+import * as db from './db.js?v=202611191052';
+import * as T from './time.js?v=202611191052';
+import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial } from './prompts.js?v=202611191052';
+import { flagKey, mergeKey, overrideKey, PROMPTS_PER_CARD, applyNames } from './scoring.js?v=202611191052';
+import { TIMER_SECONDS, ASSISTED_PLAYERS } from './config.js?v=202611191052';
+import { PLAYTEST } from './mode.js?v=202611191052';
+import { revealTime, stillPlaying } from './reveal.js?v=202611191052';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
@@ -23,7 +23,7 @@ const dayPath = (id) => `${DAYS}/${id}`;
 export const names = {};
 
 function keep(id, data) {
-  days[id] = applyNames(data, names);
+  days[id] = withSpecial(id, applyNames(data, names));
   return days[id];
 }
 
