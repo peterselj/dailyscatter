@@ -2,7 +2,7 @@
 // The function names say "et" because the original game runs on US Eastern.
 // A "day id" is the local calendar date as 'YYYY-MM-DD'.
 // A "week id" is the day id of that week's Monday.
-import { TIME_ZONE } from './config.js?v=202611191144';
+import { TIME_ZONE } from './config.js?v=202611191149';
 
 export const TZ = TIME_ZONE;
 // Each day's card stays open all day; it closes, and everyone's answers are

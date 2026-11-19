@@ -1,6 +1,6 @@
 // The prompt pool, letters, and how a day's card is chosen.
 //
-import { TIMER_SECONDS } from './config.js?v=202611191144';
+import { TIMER_SECONDS } from './config.js?v=202611191149';
 
 // To add a special card (a birthday, a holiday), add an entry to SPECIAL_CARDS
 // keyed by date. Give it 5 prompts (or more for a long card, see below);
@@ -38,14 +38,14 @@ export const SPECIAL_CARDS = {
       'Who is the world’s greatest superhero',
       'Who is loved by everyone',
       'Who gives the best hugs',
-      'Who is amazing at canasta',
+      'Who gives Shea the best belly scratches',
       'Who is always right (just ask her)',
       'Whose favorite thing at the diner is French toast',
       'Who has the best laugh',
       'Who makes the best lasagna',
       'Who would win a gold medal in worrying',
       'Who you call first with good news',
-      'Who gives Shea the best belly scratches',
+      'Who is amazing at canasta',
       'Who always knows exactly what to say',
       'Who deserves breakfast in bed',
       'Who deserves a parade',
