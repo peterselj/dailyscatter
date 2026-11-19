@@ -33,7 +33,9 @@ It sends through [GREEN-API](https://green-api.com), which links a WhatsApp numb
 4. **Test it:** back in the Editor, pick `pokeDailyScatter` in the toolbar and click **Run**, then approve the permissions Google asks for. It should finish with no error, and a new "Post results to WhatsApp" run should appear on GitHub's Actions tab.
 5. **Start the timer:** ⏰ Triggers → **Add Trigger** → function `pokeDailyScatter`, event source **Time-driven**, **Minutes timer**, **Every 10 minutes** → Save.
 
-If the token expires or something breaks, Google emails you about the failed runs.
+If the token expires or something breaks for half an hour or more, Google emails you about the failed runs. One-off blips stay quiet.
+
+**A watchdog for the clock:** if the clock stops completely (its timer or code goes missing), nothing runs, so nothing fails and no one is emailed. To catch that, the job also checks on the clock whenever GitHub's own backup schedule runs it, which happens a few times a day. If the clock hasn't started a run in the last 40 minutes, that run fails, GitHub emails you, and the run's log says "THE GOOGLE CLOCK HAS STOPPED" with the steps to fix it.
 
 **Keeping it running:**
 - **The bot's phone has to check in with WhatsApp at least every 14 days,** or WhatsApp disconnects Green API. Green API suggests every 10. Automate it with an iPhone Shortcut on the phone that has WhatsApp Business:
@@ -50,6 +52,10 @@ If the token expires or something breaks, Google emails you about the failed run
 |---|---|
 | GitHub: "All jobs have failed" around noon | The WhatsApp link dropped. Re-link it (see above). |
 | GitHub: "All jobs have failed", several in a row at other times | Something is actually broken. Open the run's log. |
+| GitHub: "All jobs have failed", and the log says "THE GOOGLE CLOCK HAS STOPPED" | The Google clock isn't running. The log lists what to check. |
 | GitHub: "No jobs were run … Internal server error", once or twice | A GitHub hiccup. Ignore it. |
 | Google: "GitHub said 401" or "403" | The clock's GitHub token expired. Make a new one. |
-| Google: "GitHub said 502" (or 500, 503) | A GitHub hiccup. Ignore it. |
+| Google: "GitHub said 502" (or 500, 503), "N runs in a row" | GitHub has been down for a while. Ignore it unless it lasts hours. |
+| Google: "We're sorry, a server error occurred" | A Google hiccup. Ignore it. |
+
+The simplest setup: in Gmail, filter emails from `noreply-apps-scripts-notifications@google.com` to skip the inbox (give them a label so you can look if you want). Keep GitHub's "All jobs have failed" emails in your inbox. Those are the ones that mean something is wrong, and the watchdog makes sure a stopped clock shows up there too.

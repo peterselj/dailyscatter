@@ -10,19 +10,29 @@
 var REPO = 'peterselj/dailyscatter';
 
 function pokeDailyScatter() {
-  const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('GITHUB_TOKEN');
   if (!token) throw new Error('Add a Script Property named GITHUB_TOKEN first.');
-  // GitHub sometimes answers with a server error for a moment; try a few times
-  // before giving up, so one hiccup doesn't send a failure email.
-  let res;
+  // GitHub (or Google) sometimes errors for a moment. Try a few times, and only
+  // report a failure (which sends Google's failure email) after 3 runs in a row
+  // have failed, i.e. half an hour. A single blip stays quiet.
+  let problem = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
-    res = poke(token);
-    if (res.getResponseCode() < 500) break;
+    try {
+      const res = poke(token);
+      const code = res.getResponseCode();
+      if (code === 204) { problem = ''; break; }
+      problem = 'GitHub said ' + code + ': ' + res.getContentText();
+      if (code < 500) break; // 401/403/404 won't fix themselves by retrying
+    } catch (e) {
+      problem = String(e && e.message || e);
+    }
     Utilities.sleep(5000 * attempt);
   }
-  if (res.getResponseCode() !== 204) {
-    throw new Error('GitHub said ' + res.getResponseCode() + ': ' + res.getContentText());
-  }
+  const failures = problem ? Number(props.getProperty('FAILURES_IN_A_ROW') || 0) + 1 : 0;
+  props.setProperty('FAILURES_IN_A_ROW', String(failures));
+  if (failures >= 3) throw new Error(problem + ' (' + failures + ' runs in a row)');
+  if (problem) console.log('Blip, will retry in 10 minutes: ' + problem);
 }
 
 function poke(token) {

@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # to check that the Google clock is still starting runs
 
 concurrency:
   group: post-results
@@ -42,6 +43,7 @@ jobs:
       - name: Post due results
         env:
           MODE: ${{ inputs.mode || 'normal' }}
+          GITHUB_TOKEN: ${{ github.token }}
           GREEN_API_URL: ${{ secrets.GREEN_API_URL }}
           GREEN_API_INSTANCE: ${{ secrets.GREEN_API_INSTANCE }}
           GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}

@@ -48,6 +48,8 @@ const DRY = args.has('--dry-run') || !configured || !GREEN.chat;
 const C = PT
   ? { days: 'pt_days', players: 'pt_players', posts: 'pt_posts', family: 'pt_meta/family' }
   : { days: 'days', players: 'players', posts: 'posts', family: 'meta/family' };
+// The Google clock should start a run every 10 minutes; this long without one means it stopped.
+const CLOCK_STALE = 40 * 60e3;
 // Don't post results that are long overdue (e.g. right after turning this on).
 const STALE_AFTER = 18 * 3600e3;
 
@@ -117,6 +119,36 @@ async function listGroups() {
   for (const g of groups) log(`  ${g.name || '(no name)'}  ->  ${g.id}`);
 }
 
+// --- Is the Google clock still running? ------------------------------------------------
+// Only GitHub's own (rare, best-effort) schedule runs check this, because a run the
+// clock started proves the clock works. If the clock hasn't started a run lately,
+// mark this run as failed so GitHub emails the owner. A silent stop is otherwise
+// invisible: nothing runs, so nothing fails.
+async function checkClock() {
+  if (PT || env.GITHUB_EVENT_NAME !== 'schedule' || !env.GITHUB_TOKEN || !env.GITHUB_REPOSITORY) return;
+  const api = (env.GITHUB_API_URL || 'https://api.github.com').replace(/\/$/, '');
+  let last;
+  try {
+    const res = await fetch(`${api}/repos/${env.GITHUB_REPOSITORY}/actions/workflows/post-results.yml/runs?event=workflow_dispatch&per_page=1`, {
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`GitHub said ${res.status}`);
+    last = Date.parse((await res.json()).workflow_runs?.[0]?.created_at ?? '');
+  } catch (e) {
+    log(`Couldn't check on the Google clock just now (${e.message}); carrying on.`);
+    return;
+  }
+  if (Number.isFinite(last) && NOW - last < CLOCK_STALE) return;
+  const ago = Number.isFinite(last) ? `${T.durationLabel(NOW - last)} ago (${T.dayLabel(T.dayId(last))}, ${T.clockLabel(last)})` : 'ever';
+  log(`⚠️ THE GOOGLE CLOCK HAS STOPPED: its last run was ${ago}. Results will be late until it's fixed.`);
+  log('   To fix: open the "Daily Scatter clock" project at script.google.com.');
+  log('   - Executions (list icon): any red pokeDailyScatter runs? "GitHub said 401" means the token expired: make a new one.');
+  log('   - Triggers (alarm clock icon): pokeDailyScatter should run every 10 minutes. Add it back if it is gone.');
+  log('   - Editor: the pokeDailyScatter code must still be there (tools/apps-script-trigger.gs).');
+  log('   Until then, Actions → Post results to WhatsApp → Run workflow posts anything that is due.');
+  process.exitCode = 1;
+}
+
 // --- Posting, at most once per day/week ----------------------------------------------
 async function postOnce(id, message) {
   const path = `${C.posts}/${id}`;
@@ -158,6 +190,8 @@ async function main() {
   // hasn't connected in 14 days. If it's down, don't burn retries on posts that can't
   // go through; once a day (the run between noon and 12:10pm) fail loudly so
   // GitHub emails the owner.
+  await checkClock();
+
   if (configured && !DRY) {
     // Only a clear "not authorized" answer counts. If Green API itself hiccups
     // (it sometimes answers 404 or 5xx for a moment), carry on: a real problem
