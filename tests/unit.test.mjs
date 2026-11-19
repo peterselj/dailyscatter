@@ -245,11 +245,11 @@ test('a long special card: 5 prompts saved, the rest added on load, with its own
   const saved = promptsFor(id, T.weekId(id), T.weekdayIndex(id));
   assert.equal(saved.length, 5); // all the database accepts
   const d = withSpecial(id, { letter: 'M', prompts: saved, cards: {} });
-  assert.equal(d.prompts.length, 10);
-  assert.equal(promptCount(id), 10);
-  assert.equal(timerFor(id), 300);
+  assert.equal(d.prompts.length, 18);
+  assert.equal(promptCount(id), 18);
+  assert.equal(timerFor(id), 360);
   assert.equal(timerFor('2026-11-23'), 180);
-  assert.equal(cardEnd({ startedAt: Date.parse('2026-11-22T15:00:00Z') }, id), Date.parse('2026-11-22T15:05:00Z'));
+  assert.equal(cardEnd({ startedAt: Date.parse('2026-11-22T15:00:00Z') }, id), Date.parse('2026-11-22T15:06:00Z'));
   // A day saved with different prompts is left alone.
   assert.equal(withSpecial(id, { letter: 'M', prompts: ['a', 'b', 'c', 'd', 'e'] }).prompts.length, 5);
 });

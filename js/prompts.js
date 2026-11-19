@@ -1,6 +1,6 @@
 // The prompt pool, letters, and how a day's card is chosen.
 //
-import { TIMER_SECONDS } from './config.js?v=202611191137';
+import { TIMER_SECONDS } from './config.js?v=202611191144';
 
 // To add a special card (a birthday, a holiday), add an entry to SPECIAL_CARDS
 // keyed by date. Give it 5 prompts (or more for a long card, see below);
@@ -32,18 +32,26 @@ export const SPECIAL_CARDS = {
     letters: ['M', 'L'],
     dupesOk: true,
     theme: 'babyblue',
-    note: 'It’s Lois’s birthday! 10 categories, 5 minutes. Any word starting with M or L counts, and duplicate answers are OK for this one.',
-    timerSeconds: 300,
+    note: 'It’s Lois’s birthday! Any word starting with M or L counts, and duplicate answers are OK for this one.',
+    timerSeconds: 360,
     prompts: [
       'Who is the world’s greatest superhero',
       'Who is loved by everyone',
-      'Who is amazing at canasta',
-      'Whose favorite thing at the diner is French toast',
       'Who gives the best hugs',
+      'Who is amazing at canasta',
       'Who is always right (just ask her)',
+      'Whose favorite thing at the diner is French toast',
       'Who has the best laugh',
+      'Who makes the best lasagna',
+      'Who would win a gold medal in worrying',
+      'Who you call first with good news',
+      'Who gives Shea the best belly scratches',
+      'Who always knows exactly what to say',
+      'Who deserves breakfast in bed',
       'Who deserves a parade',
+      'Who taught you everything you know',
       'Who gets the biggest slice of cake',
+      'Who loves you endlessly and unconditionally',
       'Who is the birthday girl',
     ],
     bonus: { points: 10000, players: ['lois', 'lowey'] },

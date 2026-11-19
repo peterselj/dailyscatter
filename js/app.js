@@ -1,11 +1,11 @@
-import * as T from './time.js?v=202611191137';
-import * as G from './game.js?v=202611191137';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191137';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611191137';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191137';
-import { resultsText } from './share.js?v=202611191137';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611191137';
-import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611191137';
+import * as T from './time.js?v=202611191144';
+import * as G from './game.js?v=202611191144';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191144';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611191144';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191144';
+import { resultsText } from './share.js?v=202611191144';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611191144';
+import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611191144';
 
 // The letter tile. Days with more than one letter ("M/L") get a smaller font.
 const letterTile = (day, cls = '') => {
