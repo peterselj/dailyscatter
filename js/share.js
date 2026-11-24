@@ -1,8 +1,8 @@
 // Builds the text for sharing a day's results into a group chat (WhatsApp,
 // iMessage...). WhatsApp formatting: *bold*, ~strikethrough~.
-import { scoreDay } from './scoring.js?v=202611191149';
-import { highlights } from './stats.js?v=202611191149';
-import { letterShort } from './prompts.js?v=202611191149';
+import { scoreDay } from './scoring.js?v=202611240055';
+import { highlights } from './stats.js?v=202611240055';
+import { letterShort } from './prompts.js?v=202611240055';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 

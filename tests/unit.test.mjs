@@ -277,6 +277,16 @@ test('every file reference carries the same version stamp', async () => {
   assert.equal(stamps.size, 1, `mixed versions: ${[...stamps].join(', ')}; run npm run stamp`);
 });
 
+test('ids and keys from the database are escaped before going into page attributes', async () => {
+  // Player ids and merge keys are Firestore map keys that anyone can write, so a
+  // key like x"><img onerror=...> must not break out of a data-* attribute.
+  const fs = await import('node:fs');
+  const src = fs.readFileSync('js/app.js', 'utf8');
+  const safe = /^(esc\(.*\)|i|idx|\w+ \? '\d' : '\d'|Math\..*)$/;
+  const unescaped = [...src.matchAll(/data-[a-z-]+="\$\{([^}]+)\}"/g)].map((m) => m[1]).filter((e) => !safe.test(e));
+  assert.deepEqual(unescaped, [], 'wrap these in esc()');
+});
+
 test('group-chat text lists every answer, crosses out matches, marks wrong letters', () => {
   const d = day({
     josh: card('Josh', ['Grapes', 'Mickey *Mantle*', 'Godzilla', '', 'Gus']),
