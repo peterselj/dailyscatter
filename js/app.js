@@ -1,11 +1,11 @@
-import * as T from './time.js?v=202611191149';
-import * as G from './game.js?v=202611191149';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611191149';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611191149';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611191149';
-import { resultsText } from './share.js?v=202611191149';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611191149';
-import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611191149';
+import * as T from './time.js?v=202611240055';
+import * as G from './game.js?v=202611240055';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611240055';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611240055';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611240055';
+import { resultsText } from './share.js?v=202611240055';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611240055';
+import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611240055';
 
 // The letter tile. Days with more than one letter ("M/L") get a smaller font.
 const letterTile = (day, cls = '') => {
@@ -387,12 +387,12 @@ function answerList(day, card) {
 function assistedCard(day, pid, name, now, lock, isMain) {
   const card = day?.cards?.[pid];
   const filled = (card?.answers ?? []).filter((a) => String(a).trim()).length;
-  const open = `<a class="btn ${isMain ? 'primary big' : 'sm'}" href="#/help/${pid}">`;
-  const skip = `<button class="btn ghost ${isMain ? '' : 'sm'}" data-act="skip" data-pid="${pid}">Not today 😴</button>`;
+  const open = `<a class="btn ${isMain ? 'primary big' : 'sm'}" href="#/help/${esc(pid)}">`;
+  const skip = `<button class="btn ghost ${isMain ? '' : 'sm'}" data-act="skip" data-pid="${esc(pid)}">Not today 😴</button>`;
   let status, actions;
   if (card?.skipped) {
     status = `😴 ${esc(name)} is sitting out today.`;
-    actions = `<button class="btn ${isMain ? '' : 'sm'}" data-act="unskip" data-pid="${pid}">Actually, let’s play</button>`;
+    actions = `<button class="btn ${isMain ? '' : 'sm'}" data-act="unskip" data-pid="${esc(pid)}">Actually, let’s play</button>`;
   } else if (card?.startedAt) {
     const n = promptCount(S.today);
     status = filled >= n ? `✓ All ${n} answers are in.` : `${filled} of ${n} answered.`;
@@ -447,7 +447,7 @@ function yesterdayCard(yid) {
     </a>
     <div class="row yday-actions">
       <a class="btn" href="#/yesterday">See all answers ›</a>
-      <button class="btn share-y" data-act="share-day" data-day="${yid}" aria-label="Share yesterday’s answers">Share</button>
+      <button class="btn share-y" data-act="share-day" data-day="${esc(yid)}" aria-label="Share yesterday’s answers">Share</button>
     </div>
   </section>`;
 }
@@ -857,7 +857,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
       const cls = [a.dupe || a.repeatOf !== null || (a.tossed && a.override === null) ? 'dupe' : '', a.text && !a.valid ? 'invalid' : '', !a.text ? 'blank' : '', a.override !== null ? 'overridden' : '', a.flags.length ? 'flagged' : ''].join(' ');
       const pending = a.merges.some((m) => !m.confirmed);
       const marks = `${a.flags.length ? `<span class="mk flag">🚩${a.flags.length}</span>` : ''}${pending ? '<span class="mk">≈?</span>' : ''}${a.override !== null ? '<span class="mk adm">set</span>' : ''}`;
-      return `<button class="ansrow ${cls}" data-act="answer" data-day="${id}" data-pid="${pid}" data-i="${i}">
+      return `<button class="ansrow ${cls}" data-act="answer" data-day="${esc(id)}" data-pid="${esc(pid)}" data-i="${i}">
         <span class="nm">${esc(players[pid].name)}</span>
         <span class="tx">${a.text ? esc(a.text) : '—'}</span>
         ${marks}
@@ -875,7 +875,7 @@ async function viewDay(id, { embedded = false, heading = '' } = {}) {
     ${hlCard}
     <p class="fine">${day.special?.dupesOk ? 'Duplicate answers were OK today, so matches still score.' : 'Struck-through answers matched someone else’s.'} Tap any answer to challenge it${AS ? '' : ' or mark two as the same'}. If most of the other players challenge it, it’s tossed.</p>
     ${sections}
-    <button class="btn primary big" data-act="share-day" data-day="${id}">Share</button>`;
+    <button class="btn primary big" data-act="share-day" data-day="${esc(id)}">Share</button>`;
 }
 
 function ordinal(n) {
@@ -935,19 +935,19 @@ function openAnswerSheet(dayId, pid, idx) {
     const other = m.a === pid ? m.b : m.a;
     const key = Object.entries(day.merges ?? {}).find(([, v]) => v === m)?.[0] ?? '';
     const desc = `${esc(nameOf(m.by))} says this is the same as ${esc(nameOf(other))}’s “${esc(players[other]?.answers[idx]?.text)}”`;
-    if (m.confirmed) return `<li>✓ ${desc} (confirmed)${S.admin ? ` <button class="link" data-act="merge-remove" data-key="${key}">undo</button>` : ''}</li>`;
+    if (m.confirmed) return `<li>✓ ${desc} (confirmed)${S.admin ? ` <button class="link" data-act="merge-remove" data-key="${esc(key)}">undo</button>` : ''}</li>`;
     return `<li>${desc}. ${S.admin
-      ? `<button class="link" data-act="merge-confirm" data-key="${key}">Confirm</button> <button class="link" data-act="merge-remove" data-key="${key}">Reject</button>`
+      ? `<button class="link" data-act="merge-confirm" data-key="${esc(key)}">Confirm</button> <button class="link" data-act="merge-remove" data-key="${esc(key)}">Reject</button>`
       : '<em>Waiting for the admin.</em>'}</li>`;
   }).join('');
 
   const others = Object.entries(players)
     .filter(([id, p]) => id !== pid && p.played && p.answers[idx].text && !a.dupeWith.includes(id))
-    .map(([id, p]) => `<button class="chip" data-act="merge-suggest" data-other="${id}">${esc(p.name)}: ${esc(p.answers[idx].text)}</button>`).join('');
+    .map(([id, p]) => `<button class="chip" data-act="merge-suggest" data-other="${esc(id)}">${esc(p.name)}: ${esc(p.answers[idx].text)}</button>`).join('');
 
   const canAct = !!meId && !AS;
   sheetEl.innerHTML = `
-    <div class="sheet-card" role="dialog" aria-modal="true" data-day="${dayId}" data-pid="${pid}" data-i="${idx}">
+    <div class="sheet-card" role="dialog" aria-modal="true" data-day="${esc(dayId)}" data-pid="${esc(pid)}" data-i="${idx}">
       <div class="grab"></div>
       <p class="eyebrow">${esc(day.prompts[idx])} · ${esc(letterShort(day))}</p>
       <h3>${esc(players[pid].name)}: ${a.text ? `“${esc(a.text)}”` : '—'}</h3>
@@ -1031,7 +1031,7 @@ async function viewWeek(arg) {
     ${banner}
     ${rows.length ? `<section class="card flush"><table class="board"><thead><tr><th></th>${head}<th>Total</th></tr></thead><tbody>${body}</tbody></table></section>` : '<div class="card empty"><p>No results yet this week. Each day’s scores show up at midnight.</p></div>'}
     <section class="card flush days">${dayList}</section>
-    ${rows.length ? `<button class="btn big" data-act="share-week" data-week="${wid}">Share standings</button>` : ''}`;
+    ${rows.length ? `<button class="btn big" data-act="share-week" data-week="${esc(wid)}">Share standings</button>` : ''}`;
 }
 
 function weekShareText(wid) {
@@ -1132,7 +1132,7 @@ function adminInboxCard() {
   const items = adminInbox();
   if (!items.length) return '';
   return `<section class="card inbox"><p class="label">🛎 Admin: ${items.length} to look at</p>
-    ${items.slice(0, 6).map((it) => `<a class="inbox-row" href="#/day/${it.id}"><span class="when">${esc(T.shortWeekday(it.id))}</span><span>${esc(it.text)}</span><span class="chev">›</span></a>`).join('')}
+    ${items.slice(0, 6).map((it) => `<a class="inbox-row" href="#/day/${esc(it.id)}"><span class="when">${esc(T.shortWeekday(it.id))}</span><span>${esc(it.text)}</span><span class="chev">›</span></a>`).join('')}
   </section>`;
 }
 

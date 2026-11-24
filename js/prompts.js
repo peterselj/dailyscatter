@@ -1,6 +1,6 @@
 // The prompt pool, letters, and how a day's card is chosen.
 //
-import { TIMER_SECONDS } from './config.js?v=202611191149';
+import { TIMER_SECONDS } from './config.js?v=202611240055';
 
 // To add a special card (a birthday, a holiday), add an entry to SPECIAL_CARDS
 // keyed by date. Give it 5 prompts (or more for a long card, see below);
