@@ -1,11 +1,11 @@
-import * as T from './time.js?v=202611262253';
-import * as G from './game.js?v=202611262253';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611262253';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611262253';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611262253';
-import { resultsText } from './share.js?v=202611262253';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611262253';
-import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611262253';
+import * as T from './time.js?v=202611262309';
+import * as G from './game.js?v=202611262309';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611262309';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611262309';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611262309';
+import { resultsText } from './share.js?v=202611262309';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611262309';
+import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611262309';
 
 // The letter tile. Days with more than one letter ("M/L") get a smaller font.
 const letterTile = (day, cls = '') => {
@@ -589,7 +589,11 @@ function makeSaver(dayId, pid, onStatus) {
     onStatus('saving');
     inflight = G.saveCardFields(dayId, pid, fields).then(
       () => { if (!pending) { store.del(bkKey); onStatus('saved'); } },
-      () => { pending = { ...fields, ...pending }; onStatus('offline'); timer = setTimeout(flush, 3000); },
+      (e) => {
+        // Refused (the card's time ran out): retrying won't help. The local backup stays.
+        if (e?.status === 403) { pending = null; onStatus('refused'); return; }
+        pending = { ...fields, ...pending }; onStatus('offline'); timer = setTimeout(flush, 3000);
+      },
     ).finally(() => { inflight = null; });
     await inflight;
   }
@@ -619,7 +623,7 @@ function saveBadge(state) {
   const el = $('.save');
   if (!el) return;
   el.dataset.state = state;
-  el.textContent = { saving: 'Saving…', saved: 'Saved ✓', offline: 'Offline – retrying' }[state] ?? '';
+  el.textContent = { saving: 'Saving…', saved: 'Saved ✓', offline: 'Offline – retrying', refused: 'Too late to save' }[state] ?? '';
 }
 
 // --- Keyboard-aware layout ---------------------------------------------------

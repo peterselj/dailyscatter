@@ -4,9 +4,11 @@ rules_version = '2';
 //
 // There are no logins, so these rules can't tell family members apart. What they
 // do: allow only the collections the app uses, only the fields it writes, keep a
-// day's letter and prompts from being changed once rolled, and never allow
-// deleting real games. Playtest data (pt_*) follows the same shape but can be
-// wiped.
+// day's letter and prompts from being changed once rolled, never allow deleting
+// real games, and keep the clock honest: the database stamps when each card
+// starts, and answers can't change once the timer (plus a few minutes' grace)
+// runs out, after "I'm done", or after the day ends. Playtest data (pt_*)
+// follows the same rules but can be wiped.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -29,12 +31,65 @@ service cloud.firestore {
 
     // Cards, flags, "same as" merges and admin overrides are added later,
     // but the roll itself can't be redone.
-    function dayUpdateOk(extraKeys) {
+    function dayUpdateOk(day, extraKeys) {
       return request.resource.data.keys().hasOnly(
-          ['letter', 'prompts', 'rolledBy', 'rolledAt', 'title', 'cards', 'flags', 'merges', 'overrides'].concat(extraKeys))
+          ['letter', 'prompts', 'rolledBy', 'rolledAt', 'title', 'cards', 'flags', 'merges', 'overrides', 'editing'].concat(extraKeys))
         && request.resource.data.letter == resource.data.letter
         && request.resource.data.prompts == resource.data.prompts
-        && request.resource.data.rolledAt == resource.data.rolledAt;
+        && request.resource.data.rolledAt == resource.data.rolledAt
+        && cardsOk(day);
+    }
+
+    // --- Cards and the clock ---
+    // Keep these two in step with js/config.js and js/prompts.js (a unit test checks).
+    function helperPlayers() { return ['kenny']; }                 // ASSISTED_PLAYERS: no timer
+    function timerSeconds(day) { return {'2026-11-22': 360}.get(day, 180); } // special cards' timerSeconds, else TIMER_SECONDS
+    function grace() { return duration.value(3, 'm'); }            // slow networks, the last save after "Time's up"
+
+    // The end of the day: midnight Eastern is 04:00 or 05:00 UTC the next morning; allow the later.
+    function dayEnd(day) {
+      let p = day.split('-');
+      return timestamp.date(int(p[0]), int(p[1]), int(p[2])) + duration.value(29, 'h');
+    }
+
+    // Each write changes at most one card and names it in `editing`, so the rules
+    // know which card to check. No card is ever removed.
+    function cardsOk(day) {
+      let before = resource.data.get('cards', {});
+      let after = request.resource.data.get('cards', {});
+      let pid = request.resource.data.get('editing', '');
+      let changed = after.diff(before).affectedKeys();
+      return changed.size() == 0 || (
+        after.keys().hasAll(before.keys())
+        && changed.hasOnly([pid])
+        && cardOk(day, pid, before.get(pid, {}), after[pid]));
+    }
+
+    function cardOk(day, pid, was, card) {
+      return card.keys().hasOnly(['name', 'startedAt', 'serverStartedAt', 'answers', 'updatedAt', 'skipped', 'assisted', 'doneAt'])
+        && request.time < dayEnd(day) + grace()
+        && (pid in helperPlayers() || timedCardOk(day, was, card));
+    }
+
+    // A timed card. Starting it, the database stamps serverStartedAt itself;
+    // after that the start can't move, and answers can change only until the
+    // timer (plus grace) runs out, and not at all after "I'm done".
+    function timedCardOk(day, was, card) {
+      let started = was.get('serverStartedAt', null);
+      return card.get('assisted', false) == false
+        && card.get('skipped', false) == false
+        && (started == null
+          ? (was.get('startedAt', null) == null
+            // Starting now.
+            ? card.get('serverStartedAt', null) == request.time && card.get('startedAt', null) is int
+            // Started before the clock rules (no stamp): it can be finished today, as it was.
+            : !('serverStartedAt' in card) && card.get('startedAt', null) == was.startedAt)
+          : card.get('serverStartedAt', null) == started
+            && card.get('startedAt', null) == was.get('startedAt', null)
+            && (was.get('doneAt', null) == null || card.get('doneAt', null) == was.doneAt)
+            && (card.get('answers', null) == was.get('answers', null)
+              || (was.get('doneAt', null) == null
+                && request.time < started + duration.value(timerSeconds(day), 's') + grace())));
     }
 
     // --- The real game ---
@@ -46,7 +101,7 @@ service cloud.firestore {
     match /days/{day} {
       allow read: if true;
       allow create: if rollOk(day);
-      allow update: if dayUpdateOk([]);
+      allow update: if dayUpdateOk(day, []);
       allow delete: if false;
     }
 
@@ -82,7 +137,7 @@ service cloud.firestore {
     match /pt_days/{day} {
       allow read: if true;
       allow create: if rollOk(day);
-      allow update: if dayUpdateOk(['revealedAt']);
+      allow update: if dayUpdateOk(day, ['revealedAt']);
       allow delete: if true;
     }
     match /pt_meta/family {

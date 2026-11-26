@@ -1,6 +1,6 @@
 // Tiny Firestore client over the REST API (no SDK: keeps the page light).
-import { FIREBASE } from './config.js?v=202611262253';
-import { encFields, decFields, SAFE_KEY } from './codec.js?v=202611262253';
+import { FIREBASE } from './config.js?v=202611262309';
+import { encFields, decFields, SAFE_KEY } from './codec.js?v=202611262309';
 
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 // Running locally talks to the mock server in tests/ instead of the real database.
@@ -15,7 +15,8 @@ async function call(method, path, { query = [], body } = {}) {
   const qs = new URLSearchParams([['key', FIREBASE.apiKey], ...query]);
   let res;
   try {
-    res = await fetch(`${API}${ROOT}/${path}?${qs}`, {
+    // ':commit' is an action on the whole database; everything else is a document path.
+    res = await fetch(`${API}${ROOT}${path.startsWith(':') ? '' : '/'}${path}?${qs}`, {
       method,
       cache: 'no-store',
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -66,12 +67,14 @@ export async function listDocs(collection) {
  *                                 missing from `data` is deleted. Omit to replace the doc.
  * @param {boolean} [opts.exists] precondition: true = must exist, false = must not exist
  */
+function checkPaths(paths) {
+  for (const p of paths) if (!p.split('.').every((k) => SAFE_KEY.test(k))) throw new Error(`Unsafe field path ${p}`);
+}
+
 export async function setDoc(path, data, { mask, exists } = {}) {
   const query = [];
-  for (const p of mask ?? []) {
-    if (!p.split('.').every((k) => SAFE_KEY.test(k))) throw new Error(`Unsafe field path ${p}`);
-    query.push(['updateMask.fieldPaths', p]);
-  }
+  checkPaths(mask ?? []);
+  for (const p of mask ?? []) query.push(['updateMask.fieldPaths', p]);
   if (exists !== undefined) query.push(['currentDocument.exists', String(exists)]);
   const doc = await call('PATCH', path, { query, body: { fields: encFields(data) } });
   return decFields(doc.fields);
@@ -83,4 +86,18 @@ export async function deleteDoc(path) {
   } catch (e) {
     if (e.status !== 404) throw e;
   }
+}
+
+/**
+ * Like setDoc, but `serverTime` fields are set to the database's own clock
+ * (phones' clocks can't be trusted for the timer). Returns nothing: read the
+ * document again if you need it.
+ */
+export async function setDocStamped(path, data, { mask, exists, serverTime = [] } = {}) {
+  checkPaths([...(mask ?? []), ...serverTime]);
+  const write = { update: { name: `${ROOT}/${path}`, fields: encFields(data) } };
+  if (mask) write.updateMask = { fieldPaths: mask };
+  if (exists !== undefined) write.currentDocument = { exists };
+  if (serverTime.length) write.updateTransforms = serverTime.map((fieldPath) => ({ fieldPath, setToServerValue: 'REQUEST_TIME' }));
+  await call('POST', ':commit', { body: { writes: [write] } });
 }

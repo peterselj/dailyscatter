@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611262253';
-import * as T from './time.js?v=202611262253';
-import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial, timerFor, promptCount } from './prompts.js?v=202611262253';
-import { flagKey, mergeKey, overrideKey, applyNames } from './scoring.js?v=202611262253';
-import { ASSISTED_PLAYERS } from './config.js?v=202611262253';
-import { PLAYTEST } from './mode.js?v=202611262253';
-import { revealTime, stillPlaying } from './reveal.js?v=202611262253';
+import * as db from './db.js?v=202611262309';
+import * as T from './time.js?v=202611262309';
+import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial, timerFor, promptCount } from './prompts.js?v=202611262309';
+import { flagKey, mergeKey, overrideKey, applyNames } from './scoring.js?v=202611262309';
+import { ASSISTED_PLAYERS } from './config.js?v=202611262309';
+import { PLAYTEST } from './mode.js?v=202611262309';
+import { revealTime, stillPlaying } from './reveal.js?v=202611262309';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
@@ -249,21 +249,29 @@ export async function startCard(today, pid, name, { assisted = false, delayMs = 
     skipped: false,
   };
   if (assisted) card.assisted = true;
-  await writeDay(today, { cards: { [pid]: card } }, [`cards.${pid}`]);
+  // Timed cards: the database stamps the start itself (serverStartedAt), and
+  // firestore.rules times the card from that, not from the phone's clock.
+  await db.setDocStamped(dayPath(today), { cards: { [pid]: card }, editing: pid }, {
+    mask: [`cards.${pid}`, 'editing'],
+    exists: true,
+    serverTime: assisted ? [] : [`cards.${pid}.serverStartedAt`],
+  });
+  await loadDay(today);
   return card;
 }
 
+// Every card write names its player in `editing`: firestore.rules checks that card.
+const cardWrite = (pid, card) => ({ cards: { [pid]: card }, editing: pid });
+
 export async function saveCardFields(dayId, pid, fields) {
   const f = { ...fields, updatedAt: Date.now() };
-  await writeDay(dayId, { cards: { [pid]: f } }, Object.keys(f).map((k) => `cards.${pid}.${k}`));
+  await writeDay(dayId, cardWrite(pid, f), [...Object.keys(f).map((k) => `cards.${pid}.${k}`), 'editing']);
 }
 
 export async function setSkipped(today, pid, name, skipped) {
   const card = days[today]?.cards?.[pid];
   if (card) return saveCardFields(today, pid, { skipped });
-  return writeDay(today, {
-    cards: { [pid]: { name, assisted: true, skipped, answers: Array(promptCount(today)).fill(''), updatedAt: Date.now() } },
-  }, [`cards.${pid}`]);
+  return writeDay(today, cardWrite(pid, { name, assisted: true, skipped, answers: Array(promptCount(today)).fill(''), updatedAt: Date.now() }), [`cards.${pid}`, 'editing']);
 }
 
 // --- Review: flags, "same as" merges, admin overrides ----------------------

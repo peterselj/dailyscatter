@@ -38,7 +38,30 @@ function applyPath(target, source, parts) {
   applyPath(target[head].mapValue.fields, srcChild, rest);
 }
 
+// documents:commit, as the app uses it: one update, optionally with server-time fields.
+function handleCommit(req, res, body) {
+  const now = new Date().toISOString();
+  for (const w of JSON.parse(body || '{}').writes ?? []) {
+    stats.writes++;
+    const p = w.update.name.split('/documents/')[1];
+    const cur = docs.get(p);
+    if (w.currentDocument?.exists === false && cur) return err(res, 409, 'ALREADY_EXISTS', 'Document already exists');
+    if (w.currentDocument?.exists === true && !cur) return err(res, 404, 'NOT_FOUND', 'No document to update');
+    const mask = w.updateMask?.fieldPaths ?? [];
+    let fields = mask.length ? structuredClone(cur?.fields ?? {}) : (w.update.fields ?? {});
+    for (const fp of mask) applyPath(fields, w.update.fields ?? {}, fp.split('.'));
+    const nest = ([head, ...rest], leaf) => ({ [head]: rest.length ? { mapValue: { fields: nest(rest, leaf) } } : leaf });
+    for (const t of w.updateTransforms ?? []) {
+      const parts = t.fieldPath.split('.');
+      applyPath(fields, nest(parts, { timestampValue: now }), parts);
+    }
+    docs.set(p, { fields, createTime: cur?.createTime ?? now, updateTime: now });
+  }
+  return send(res, 200, { writeResults: [], commitTime: now });
+}
+
 function handleMock(req, res, url, body) {
+  if (req.method === 'POST' && url.pathname.endsWith('/documents:commit')) return handleCommit(req, res, body);
   const m = url.pathname.match(/^\/__mock\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents\/(.+)$/);
   if (!m) return err(res, 404, 'NOT_FOUND', 'bad path');
   const p = decodeURIComponent(m[1]);

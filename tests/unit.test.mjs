@@ -277,6 +277,19 @@ test('every file reference carries the same version stamp', async () => {
   assert.equal(stamps.size, 1, `mixed versions: ${[...stamps].join(', ')}; run npm run stamp`);
 });
 
+test('firestore.rules knows the same helper players and special timers as the app', async () => {
+  const fs = await import('node:fs');
+  const { ASSISTED_PLAYERS, TIMER_SECONDS } = await import('../js/config.js');
+  const rules = fs.readFileSync('firestore.rules', 'utf8');
+  const helpers = rules.match(/function helperPlayers\(\) \{ return \[(.*?)\]; \}/)[1];
+  assert.deepEqual([...helpers.matchAll(/'([^']+)'/g)].map((m) => m[1]), ASSISTED_PLAYERS.map((p) => p.id), 'helperPlayers() in firestore.rules');
+  const [, map, fallback] = rules.match(/function timerSeconds\(day\) \{ return \{(.*?)\}\.get\(day, (\d+)\); \}/);
+  const inRules = Object.fromEntries([...map.matchAll(/'([^']+)': (\d+)/g)].map((m) => [m[1], Number(m[2])]));
+  const inApp = Object.fromEntries(Object.entries(SPECIAL_CARDS).filter(([, c]) => c.timerSeconds).map(([d, c]) => [d, c.timerSeconds]));
+  assert.deepEqual(inRules, inApp, 'timerSeconds() in firestore.rules');
+  assert.equal(Number(fallback), TIMER_SECONDS);
+});
+
 test('ids and keys from the database are escaped before going into page attributes', async () => {
   // Player ids and merge keys are Firestore map keys that anyone can write, so a
   // key like x"><img onerror=...> must not break out of a data-* attribute.
