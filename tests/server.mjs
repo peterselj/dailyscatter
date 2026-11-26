@@ -46,12 +46,12 @@ function handleMock(req, res, url, body) {
   const name = `projects/x/databases/(default)/documents/${p}`;
 
   if (req.method === 'GET' && segs.length % 2 === 1) {
-    stats.reads++;
     const prefix = `${p}/`;
     const list = [...docs.entries()]
       .filter(([k]) => k.startsWith(prefix) && !k.slice(prefix.length).includes('/'))
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, d]) => ({ name: `projects/x/databases/(default)/documents/${k}`, ...d }));
+    stats.reads += Math.max(1, list.length); // like Firestore: a list is billed per document returned
     return send(res, 200, list.length ? { documents: list } : {});
   }
   if (req.method === 'GET') {

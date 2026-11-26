@@ -1,11 +1,11 @@
-import * as T from './time.js?v=202611240055';
-import * as G from './game.js?v=202611240055';
-import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611240055';
-import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611240055';
-import { PLAYTEST, exitPlaytest } from './mode.js?v=202611240055';
-import { resultsText } from './share.js?v=202611240055';
-import { highlights, streaks, hallOfFame } from './stats.js?v=202611240055';
-import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611240055';
+import * as T from './time.js?v=202611262253';
+import * as G from './game.js?v=202611262253';
+import { scoreDay, scoreWeek, hasPlayed, matchKey } from './scoring.js?v=202611262253';
+import { FAMILY_CODE_SHA256, ADMIN_CODE_SHA256, ASSISTED_PLAYERS } from './config.js?v=202611262253';
+import { PLAYTEST, exitPlaytest } from './mode.js?v=202611262253';
+import { resultsText } from './share.js?v=202611262253';
+import { highlights, streaks, hallOfFame } from './stats.js?v=202611262253';
+import { specialRules, letterShort, letterWords, promptCount, timerFor } from './prompts.js?v=202611262253';
 
 // The letter tile. Days with more than one letter ("M/L") get a smaller font.
 const letterTile = (day, cls = '') => {
@@ -155,12 +155,22 @@ window.addEventListener('hashchange', () => { document.querySelector('.confetti'
 // ---------------------------------------------------------------------------
 
 let playCleanup = null;
-let namesAt = Date.now(); // names are loaded at startup, then refreshed every few minutes
+
+// Things that rarely change (names, the family list, yesterday's results) are
+// re-read every few minutes rather than on every 30-second refresh: each read is
+// billed, and an open phone refreshes all day.
+const SLOW_MS = 5 * 60_000;
+const lastRead = { names: Date.now(), family: 0 }; // names are loaded at startup
+function due(what) {
+  if (Date.now() - (lastRead[what] ?? 0) < SLOW_MS) return false;
+  lastRead[what] = Date.now();
+  return true;
+}
 
 async function render() {
   if (playCleanup) { playCleanup(); playCleanup = null; }
-  try { await Promise.all([PLAYTEST ? G.loadClock() : null, G.loadFamily()]); } catch { /* offline */ }
-  if (S.famOk && Date.now() - namesAt > 5 * 60_000) { namesAt = Date.now(); G.listPlayers().catch(() => {}); }
+  try { await Promise.all([PLAYTEST ? G.loadClock() : null, due('family') ? G.loadFamily() : null]); } catch { lastRead.family = 0; /* offline */ }
+  if (S.famOk && due('names')) G.listPlayers().catch(() => {});
   S.today = G.todayId();
   applyTheme(S.today);
 
@@ -292,7 +302,8 @@ async function viewToday() {
   const yid = T.addDays(today, -1);
   const wid = T.weekId(today);
   const extra = [];
-  extra.push(G.loadDay(yid)); // re-fetched: flags and admin fixes can change it
+  // Re-read now and then: flags and admin fixes can still change yesterday.
+  if (!(yid in G.days) || due(`day:${yid}`)) extra.push(G.loadDay(yid));
   if (!currentWeekScores(wid).rows.length) extra.push(G.loadWeek(T.addDays(wid, -7), T.addDays(wid, -1), { onlyFresh: [] }));
   await Promise.all(extra);
 
@@ -1274,6 +1285,7 @@ setInterval(() => {
     const pids = [S.me?.id, ...ASSISTED_PLAYERS.map((p) => p.id)].filter(Boolean);
     try {
       const [, , players] = await Promise.all([G.loadClock(), G.loadFamily(), G.listPlayers()]);
+      lastRead.family = Date.now();
       void players;
       S.today = G.todayId();
       await G.loadDay(S.today);

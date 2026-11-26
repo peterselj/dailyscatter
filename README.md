@@ -87,7 +87,7 @@ It's a plain static site with no build step and no dependencies. `index.html` lo
 
 **About security:** there are no logins. The family code keeps strangers from wandering in. The admin code is checked on the phone. The database rules stop anyone from re-rolling, deleting or adding unexpected data. This is fine for a family game, but it isn't bank-grade security: a determined techie could still edit answers through the API.
 
-**Cost:** a family this size uses a tiny fraction of Firestore's free tier. The game itself has no server. The optional WhatsApp posts run as a scheduled GitHub Actions job (`tools/post-results.mjs`), and the optional judge bot is a Google Apps Script (`tools/sheabot.gs`); both are free.
+**Cost:** a family this size uses a tiny fraction of Firestore's free tier. The game itself has no server. The optional WhatsApp posts run as a scheduled GitHub Actions job (`tools/post-results.mjs`), and the optional judge bot is a Google Apps Script (`tools/sheabot.gs`); both are free. To keep it that way as history grows, each phone keeps settled days (older than two weeks) and only re-reads recent ones, with a full re-read once a month.
 
 ## Development
 
