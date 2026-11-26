@@ -1,11 +1,11 @@
 // Game actions: everything that reads or writes the database.
-import * as db from './db.js?v=202611240055';
-import * as T from './time.js?v=202611240055';
-import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial, timerFor, promptCount } from './prompts.js?v=202611240055';
-import { flagKey, mergeKey, overrideKey, applyNames } from './scoring.js?v=202611240055';
-import { ASSISTED_PLAYERS } from './config.js?v=202611240055';
-import { PLAYTEST } from './mode.js?v=202611240055';
-import { revealTime, stillPlaying } from './reveal.js?v=202611240055';
+import * as db from './db.js?v=202611262253';
+import * as T from './time.js?v=202611262253';
+import { promptsFor, swapRepeats, rollLetter, SPECIAL_CARDS, withSpecial, timerFor, promptCount } from './prompts.js?v=202611262253';
+import { flagKey, mergeKey, overrideKey, applyNames } from './scoring.js?v=202611262253';
+import { ASSISTED_PLAYERS } from './config.js?v=202611262253';
+import { PLAYTEST } from './mode.js?v=202611262253';
+import { revealTime, stillPlaying } from './reveal.js?v=202611262253';
 
 // Playtest data lives in its own collections so it never mixes with real games.
 const DAYS = PLAYTEST ? 'pt_days' : 'days';
@@ -22,7 +22,12 @@ const dayPath = (id) => `${DAYS}/${id}`;
 // are shown with these names whatever name the card was saved under.
 export const names = {};
 
+// Day documents exactly as the database sent them (before names and special
+// rules are applied), so settled days can be kept on this phone.
+const fetched = {};
+
 function keep(id, data) {
+  fetched[id] = data ? structuredClone(data) : null;
   days[id] = withSpecial(id, applyNames(data, names));
   return days[id];
 }
@@ -40,10 +45,60 @@ export async function loadWeek(wid, upTo, { onlyFresh } = {}) {
   return ids;
 }
 
-export async function loadAllDays() {
-  const list = await db.listDocs(DAYS);
-  for (const { id, data } of list) keep(id, data);
-  return list.map((d) => d.id).sort();
+// --- History (every past day, for streaks, the hall of fame and Past weeks) ---
+//
+// The database charges for every document read, and listing all days reads every
+// day ever played: that grew without limit. So days old enough to be settled are
+// kept on this phone, and a visit only re-reads the recent ones.
+//   - Days in the last FRESH_DAYS are always re-read: flags and admin fixes still change them.
+//   - Everything is re-read from scratch once a month (or after a long time away),
+//     which picks up the rare fix to an old day.
+const FRESH_DAYS = 14;
+const MAX_GAP_DAYS = 45;
+const FULL_RELOAD_MS = 30 * 86_400_000;
+const HISTORY_KEY = `ds.history.v1.${DAYS}`;
+const RECENT_MS = 5 * 60_000; // within one visit, don't re-read history more than this often
+
+function readHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    return h && typeof h.through === 'string' && h.days && typeof h.days === 'object' ? h : null;
+  } catch { return null; }
+}
+
+function saveHistory(through, fullAt) {
+  const kept = {};
+  for (const [id, data] of Object.entries(fetched)) if (id <= through && data) kept[id] = data;
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify({ through, fullAt, days: kept })); } catch { /* full or private mode: just re-read next time */ }
+}
+
+function forgetHistory() {
+  try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+}
+
+let historyAt = 0;
+
+/** Loads every day played so far. Returns the ids of days that have a document, sorted. */
+export async function loadAllDays({ now = Date.now() } = {}) {
+  const today = todayId();
+  const through = T.addDays(today, -FRESH_DAYS - 1); // the newest day treated as settled
+  if (now - historyAt > RECENT_MS) {
+    const h = readHistory();
+    const usable = h && now - (h.fullAt ?? 0) < FULL_RELOAD_MS && h.through <= today && h.through >= T.addDays(today, -MAX_GAP_DAYS);
+    if (usable) {
+      for (const [id, data] of Object.entries(h.days)) if (!(id in days)) keep(id, data);
+      const recent = [];
+      for (let d = T.addDays(h.through < through ? h.through : through, 1); d <= today; d = T.addDays(d, 1)) recent.push(d);
+      await Promise.all(recent.map(loadDay));
+      saveHistory(through, h.fullAt);
+    } else {
+      const list = await db.listDocs(DAYS);
+      for (const { id, data } of list) keep(id, data);
+      saveHistory(through, now);
+    }
+    historyAt = now;
+  }
+  return Object.keys(days).filter((id) => days[id] && id <= today).sort();
 }
 
 export async function listPlayers() {
@@ -163,6 +218,9 @@ export async function wipePlaytest() {
   const posts = await db.listDocs('pt_posts');
   await Promise.all(posts.map(({ id }) => db.deleteDoc(`pt_posts/${id}`)));
   for (const k of Object.keys(days)) delete days[k];
+  for (const k of Object.keys(fetched)) delete fetched[k];
+  forgetHistory();
+  historyAt = 0;
   dayShift = 0;
 }
 
