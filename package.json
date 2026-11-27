@@ -12,7 +12,9 @@
     "check": "npm test && npm run e2e && npm run devices && npm run poster",
     "poster": "node tests/poster.mjs",
     "screens": "node tests/readme-screens.mjs",
-    "doctor": "node tools/doctor.mjs"
+    "doctor": "node tools/doctor.mjs",
+    "test:rules": "npx -y firebase-tools@14 emulators:exec --only firestore --project dailyscatter-f0771 \"node --test tests/rules.test.mjs\"",
+    "clock-check": "node tools/clock-check.mjs"
   },
   "license": "MIT"
 }

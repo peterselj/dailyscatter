@@ -260,7 +260,7 @@ input:disabled { opacity: .7; }
 .letter-tile.md { width: 52px; height: 52px; font-size: 32px; border-radius: 13px; }
 .letter-tile.md.duo { font-size: 18px; }
 .save { font-size: 12px; color: var(--muted); min-height: 15px; white-space: nowrap; }
-.save[data-state=offline] { color: var(--warn); font-weight: 700; }
+.save[data-state=offline], .save[data-state=refused] { color: var(--warn); font-weight: 700; }
 
 .play-top {
   position: relative; flex: none; display: flex; align-items: center; gap: 10px;

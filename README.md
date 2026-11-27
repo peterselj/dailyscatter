@@ -108,7 +108,7 @@ npm run serve         # local copy at http://localhost:8080 using an in-memory f
 
 **Before every release, run `npm run stamp`.** It puts a fresh version number on every file reference (`?v=…`), so phones download a matching set of new files instead of mixing old cached ones with new ones. A unit test fails if a reference is unstamped or the stamps don't match.
 
-On `localhost`, the app automatically uses the fake database in `tests/server.mjs`, so testing never touches the real one. To test against Google's Firestore emulator (which also enforces `firestore.rules`), start the emulator, then run with `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085`.
+On `localhost`, the app automatically uses the fake database in `tests/server.mjs`, so testing never touches the real one. To test against Google's Firestore emulator (which also enforces `firestore.rules`), start the emulator, then run with `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085`. The end-to-end test runs on a pretend date, so under the clock rules its card saves are refused; `npm run test:rules` tests the rules themselves with the real clock (see [docs/clock-rules.md](docs/clock-rules.md)).
 
 ## License
 
